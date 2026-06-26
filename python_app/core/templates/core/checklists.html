@@ -1,0 +1,41 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold">Checklists</h1>
+<table class="mt-4 w-full text-sm bg-white border border-slate-200 rounded-lg overflow-hidden">
+  <thead class="bg-slate-100 text-left">
+    <tr>
+      <th class="px-3 py-2">Item</th>
+      <th class="px-3 py-2">Colaborador</th>
+      <th class="px-3 py-2">Status</th>
+      <th class="px-3 py-2">Vencimento</th>
+      <th class="px-3 py-2"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in items %}
+    <tr class="border-t border-slate-100">
+      <td class="px-3 py-2">{{ c.title }}</td>
+      <td class="px-3 py-2">{{ c.employee.full_name }}</td>
+      <td class="px-3 py-2">{{ c.status }}</td>
+      <td class="px-3 py-2">{{ c.due_date|default:"—" }}</td>
+      <td class="px-3 py-2 space-x-2">
+        {% if c.status != "CONCLUIDO" %}
+        <form method="post" action="{% url 'complete_checklist_item' c.id %}" class="inline">
+          {% csrf_token %}
+          <button class="text-xs text-blue-600">Concluir</button>
+        </form>
+        {% endif %}
+        {% if can_validate and not c.validated_by_id %}
+        <form method="post" action="{% url 'validate_checklist_item' c.id %}" class="inline">
+          {% csrf_token %}
+          <button class="text-xs text-emerald-600">Validar</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td class="px-3 py-2 text-slate-500" colspan="5">Nenhum item no seu escopo.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

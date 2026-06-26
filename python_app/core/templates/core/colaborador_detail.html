@@ -1,0 +1,37 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold">{{ employee.full_name }}</h1>
+<p class="text-sm text-slate-500">{{ employee.position.title }} · {{ employee.department.name }} · {{ employee.unit.name }} · {{ employee.status }}</p>
+
+<h2 class="mt-6 font-medium">Onboarding</h2>
+{% for o in onboardings %}
+  <div class="mt-2 rounded-lg border border-slate-200 bg-white p-4">
+    <p class="text-sm text-slate-500">Início: {{ o.start_date }} · Status: {{ o.status }}</p>
+    <ul class="mt-2 text-sm space-y-1">
+      {% for s in o.stages.all %}
+      <li class="flex justify-between"><span>{{ s.name }}</span><span>{{ s.status }}</span></li>
+      {% endfor %}
+    </ul>
+  </div>
+{% empty %}
+  <p class="text-sm text-slate-500">Sem onboarding registrado.</p>
+{% endfor %}
+
+<h2 class="mt-6 font-medium">Checklist pendente</h2>
+<ul class="mt-2 text-sm space-y-1">
+  {% for c in pending_checklist %}
+  <li class="rounded border border-slate-200 bg-white px-3 py-2">{{ c.title }} — {{ c.status }}</li>
+  {% empty %}
+  <li class="text-slate-500">Sem itens pendentes.</li>
+  {% endfor %}
+</ul>
+
+<h2 class="mt-6 font-medium">PDI</h2>
+<ul class="mt-2 text-sm space-y-1">
+  {% for p in pdis %}
+  <li class="rounded border border-slate-200 bg-white px-3 py-2">{{ p.development_goal }} — {{ p.completion_pct }}%</li>
+  {% empty %}
+  <li class="text-slate-500">Sem PDI registrado.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

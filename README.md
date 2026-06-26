@@ -86,7 +86,7 @@ RH-SOP-01 (pasta "onboarding").
   - Acordo de tratamento de dados com a Sólides (terceiro mencionado nos
     documentos como sistema de registro oficial).
 
-## Setup local
+## Setup local (Next.js)
 
 ```bash
 cp .env.example .env   # ajuste DATABASE_URL e gere AUTH_SECRET (openssl rand -base64 32)
@@ -96,7 +96,41 @@ npm run db:seed        # popula unidades, cargos, trilhas, 1 onboarding real e u
 npm run dev
 ```
 
-Usuários de teste (senha `Riale@2026` para todos):
+## Versão Python (Django) — `python_app/`
+
+Existe uma segunda implementação do mesmo MVP em **Python/Django + PostgreSQL**,
+na pasta `python_app/`. Ela cobre os mesmos módulos centrais (autenticação,
+RBAC, escopo por papel, onboarding com checklist, PDI, plano de carreira,
+dashboard e auditoria imutável), usando templates server-side (Django
+templates) em vez de Next.js/React — não é necessário Node.js para rodá-la.
+
+```bash
+cd python_app
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+cp .env.example .env            # ajuste DJANGO_SECRET_KEY e dados do Postgres
+# crie o banco antes (ex.: createdb riale_django ou psql -c "CREATE DATABASE riale_django;")
+
+python manage.py migrate
+python manage.py seed_data      # popula unidades, cargos, trilhas, 1 onboarding real e usuários
+python manage.py runserver
+```
+
+Acesse `http://localhost:8000`. Os usuários de teste são os mesmos da tabela
+abaixo (senha `Riale@2026`).
+
+Diferenças relevantes em relação à versão Next.js:
+- Frontend renderizado pelo próprio Django (sem build de JS/CSS além do Tailwind via CDN).
+- `python_app/core/rbac.py` e `python_app/core/scope.py` equivalem a
+  `src/lib/rbac.ts`/`src/lib/scope.ts`.
+- `python_app/core/audit.py` (`record_audit()`) equivale a `src/lib/audit.ts`.
+- Cobre o mesmo recorte de MVP da seção "O que está no MVP" abaixo; os itens
+  da "fase 2" (PDL, PromotionScore, exportação, etc.) também não foram
+  portados nesta versão.
+
+Usuários de teste (senha `Riale@2026` para todos, em ambas as versões):
 
 | Papel | E-mail |
 |---|---|

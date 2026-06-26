@@ -1,0 +1,16 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold">Plano de Carreira</h1>
+<div class="mt-4 space-y-4">
+  {% for t in tracks %}
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <p class="font-medium">{{ t.name }}</p>
+    <ul class="mt-2 text-sm space-y-1">
+      {% for s in t.stages.all %}
+      <li>{{ s.level }} — {{ s.mastery_criteria }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "core/base.html" %}
+{% block content %}
+<h1 class="text-xl font-semibold">Onboarding</h1>
+<div class="mt-4 space-y-2">
+  {% for p in processes %}
+  <div class="rounded-lg border border-slate-200 bg-white p-4">
+    <p class="font-medium">{{ p.employee.full_name }}</p>
+    <p class="text-sm text-slate-500">{{ p.template.name }} · início {{ p.start_date }} · {{ p.status }}</p>
+  </div>
+  {% empty %}
+  <p class="text-sm text-slate-500">Nenhum processo de onboarding no seu escopo.</p>
+  {% endfor %}
+</div>
+{% endblock %}
