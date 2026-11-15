@@ -122,7 +122,9 @@ pelo mesmo e-mail de login.
 4. **Depois do primeiro acesso:** apague `BOOTSTRAP_TOKEN` e `BOOTSTRAP_ADMIN_CPF` da Vercel.
    A tela já fica fechada de qualquer forma; remover as variáveis é uma camada extra.
 
-## Passo 7 — E-mails (recomendado antes de liberar ao RH)
+## Passo 7 — E-mails (necessário para a comunicação com gestores)
+
+> A partir da Fase 3, use preferencialmente o **e-mail corporativo (SMTP)**. O passo a passo completo, com Google Workspace e Microsoft 365, está em `docs/COMUNICACAO.md`, seção 3. O roteiro abaixo (Resend) continua válido como alternativa.
 
 Sem esta etapa, "Esqueci minha senha" não envia e-mail: a mensagem fica na fila, visível em
 *Configurações › Sistema*, e o administrador redefine a senha manualmente.

@@ -8,20 +8,33 @@ import { ROLE_LABEL } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { recordAudit } from "@/lib/audit";
 import { Sidebar } from "@/components/sidebar";
+import { AutoDispatch } from "@/components/auto-dispatch";
+import { runTick } from "@/modules/email/digests";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   if (user.mustChangePassword) redirect("/trocar-senha");
 
   const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId }, select: { name: true } }) : null;
-  const [reviews, results] = await Promise.all([pendingReviewCount(user), pendingResults(user).then((r) => r.length)]);
-  const badges = { aprovacoes: reviews, resultados: results };
+  const [reviews, results, comms] = await Promise.all([
+    pendingReviewCount(user),
+    pendingResults(user).then((r) => r.length),
+    can(user, "comunicacoes.view")
+      ? Promise.all([prisma.managerDigest.count({ where: { status: { in: ["AGUARDANDO_REVISAO", "SEM_DESTINATARIO"] } } }), prisma.notification.count({ where: { channel: "EMAIL", status: "FALHOU" } })]).then(([a, b]) => a + b)
+      : Promise.resolve(0),
+  ]);
+  const badges = { aprovacoes: reviews, resultados: results, comunicacoes: comms };
   const items = NAVIGATION.filter((n) => user.permissions.has(n.permission)).map(({ href, label, icon, ready, group, badge }) => ({
     href, label, icon, ready, group, groupLabel: NAV_GROUP_LABEL[group], badge: badge ? badges[badge] : undefined,
   }));
   const quickActions = can(user, "recrutamento.manage")
     ? [{ href: "/candidatos/novo", label: "+ Candidato" }, { href: "/entrevistas/agendar", label: "+ Entrevista" }]
     : [];
+
+  async function tick() {
+    "use server";
+    await runTick().catch((e) => console.error("tick", e));
+  }
 
   async function logout() {
     "use server";
@@ -31,6 +44,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen lg:flex">
+      {can(user, "comunicacoes.manage") && <AutoDispatch tick={tick} />}
       <Sidebar items={items} quickActions={quickActions} logout={logout} user={{ name: user.name, roleLabel: ROLE_LABEL[user.role], scope: unit?.name ?? "Todas as unidades" }} />
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8"><div className="mx-auto max-w-[1400px]">{children}</div></main>
     </div>

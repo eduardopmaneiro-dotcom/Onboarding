@@ -4,7 +4,9 @@ Plataforma web interna da **Riale Hotéis** (Brisa Barra, Imperial e Vilamar). E
 construída para receber, em fases, os módulos de recrutamento, admissão, remuneração,
 indicadores e carreira.
 
-> **Fase atual: 2 — Recrutamento e seleção** (vagas, candidatos, agenda de entrevistas,
+> **Fase atual: 3 — Comunicação automática com gestores** (aviso consolidado de agenda,
+> fechamento diário às 18h30, retificações, fila com novas tentativas — ver
+> [`docs/COMUNICACAO.md`](docs/COMUNICACAO.md)), sobre a **Fase 2 — Recrutamento e seleção** (vagas, candidatos, agenda de entrevistas,
 > resultados, aprovação do gestor, histórico e importação da planilha do RH — ver
 > [`docs/RECRUTAMENTO.md`](docs/RECRUTAMENTO.md)), sobre a **Fase 1 — Fundação**.
 >
@@ -18,6 +20,7 @@ indicadores e carreira.
 
 | Documento | Conteúdo |
 |---|---|
+| [`docs/COMUNICACAO.md`](docs/COMUNICACAO.md) | **E-mails aos gestores: como funciona, configuração do e-mail corporativo, testes** |
 | [`docs/RECRUTAMENTO.md`](docs/RECRUTAMENTO.md) | **Guia do módulo de recrutamento, importação da planilha e análise dos dados atuais** |
 | [`docs/DEPLOY-VERCEL.md`](docs/DEPLOY-VERCEL.md) | **Publicação em produção (Vercel + Neon) e primeiro acesso** |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas, modelo de dados, segurança/LGPD, roadmap e riscos |
@@ -119,11 +122,16 @@ Senha de todos: **`Riale@2026Seguro`**
 | `npm run test:integration` | Serviços contra o PostgreSQL real (requer `db:seed:demo`): escopo, anti-escalonamento, CPF protegido, auditoria, simulação de 24 candidatos, regras de resultado e aprovação, importação |
 | `npm run test:e2e` | Navegador real (Playwright) contra o servidor rodando: login, perfis, cadastros, validação, LGPD, documentos, recuperação de senha, bloqueio, responsividade |
 | `npm run test:e2e:recrutamento` | Fluxo completo no navegador: vaga → candidatos (duplicidade) → agendamento em lote → resultado → decisão do gestor → histórico → importação da planilha |
+| `npm run test:e2e:comunicacao` | Navegador: revisão/edição do aviso, encerramento manual do dia, painel de configuração, proteção do cron |
 | `npm run test:e2e:first-access` | Banco de produção vazio: primeiro acesso (CPF + código), cadastro dos demais usuários, troca obrigatória de senha |
 
 O E2E exige o servidor no ar (`npm start`) e o Playwright instalado
 (`npm i -D playwright && npx playwright install chromium`). Capturas de tela ficam em
 `tests/e2e/screenshots/`.
+
+**Resultado na entrega da Fase 3:** 14/14 unitários; 30/30 de integração (17 anteriores + 13 de
+comunicação, com SMTP real até um servidor local); E2E 15/15 (Fase 1), 7/7 (recrutamento) e 4/4
+(comunicação), sobre banco recriado do zero.
 
 **Resultado na entrega da Fase 2:** 14/14 unitários, 17/17 de integração (incluindo a
 simulação de 24 candidatos), 15/15 cenários E2E da Fase 1, 7/7 do recrutamento e 12/12 do

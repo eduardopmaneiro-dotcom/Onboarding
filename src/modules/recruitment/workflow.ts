@@ -10,6 +10,8 @@ import { recordEvent } from "@/modules/recruitment/events";
 import { interviewScopeWhere, jobScopeWhere } from "@/modules/recruitment/scope";
 import { DECISION_LABEL, EXTERNAL_LABEL, RESULT_LABEL } from "@/modules/recruitment/constants";
 import { appUrl, enqueueNotification } from "@/modules/notifications/service";
+import { dateKey } from "@/lib/datetime";
+import { pairsForInterviews, queueAgenda } from "@/modules/email/digests";
 
 type Tx = Prisma.TransactionClient;
 
@@ -26,7 +28,19 @@ const scheduleInput = z.object({
   interviewerUserId: z.string().min(1).optional(),
   type: z.enum(InterviewType).optional(),
   location: z.string().trim().max(160).optional(),
+  /** RH quer revisar o texto do aviso ao gestor antes do envio (padrão: envio automático) */
+  reviewEmail: z.preprocess((v) => v === true || v === "true" || v === "on", z.boolean()).optional(),
 });
+
+/** Avisa a consolidação de e-mails; falha aqui nunca desfaz o agendamento (fica registrada no log). */
+async function notifyAgenda(ids: string[], opts: { hold?: boolean; actorId: string; extraDates?: Array<{ id: string; date: string }> }) {
+  try {
+    return await queueAgenda(await pairsForInterviews(ids, opts.extraDates ?? []), { hold: opts.hold, actorId: opts.actorId });
+  } catch (e) {
+    console.error("Falha ao programar aviso ao gestor", e);
+    return [];
+  }
+}
 
 /**
  * Agenda uma ou várias entrevistas para a mesma vaga e data.
@@ -81,7 +95,8 @@ export async function scheduleInterviews(user: CurrentUser, raw: unknown) {
     return out;
   });
   await recordAudit({ entityType: "Interview", entityId: created.map((c) => c.id).join(","), action: "CREATE", actorId: user.id, actorRole: user.role, newValue: { vaga: job.code, quantidade: created.length } });
-  return created;
+  const notices = await notifyAgenda(created.map((c) => c.id), { hold: data.reviewEmail, actorId: user.id });
+  return Object.assign(created, { notices });
 }
 
 export async function rescheduleInterview(user: CurrentUser, interviewId: string, date: string, time: string, interviewerUserId?: string) {
@@ -96,6 +111,8 @@ export async function rescheduleInterview(user: CurrentUser, interviewId: string
     await tx.interview.update({ where: { id: iv.id }, data: { scheduledAt: start, hasTime: true, status: "AGENDADA", ...(interviewer ? { interviewerUserId: interviewer.id, interviewerName: interviewer.name } : {}) } });
     await recordEvent(tx, { candidateId: iv.application.candidateId, applicationId: iv.applicationId, interviewId: iv.id, type: "ENTREVISTA_REMARCADA", summary: `Entrevista remarcada de ${fmtDateTime(iv.scheduledAt, iv.hasTime)} para ${fmtDateTime(start)}`, actorUserId: user.id });
   });
+  // avisa o gestor da data nova e, se mudou o dia, também da data antiga
+  await notifyAgenda([iv.id], { actorId: user.id, extraDates: [{ id: iv.id, date: dateKey(iv.scheduledAt) }] });
 }
 
 export async function cancelInterview(user: CurrentUser, interviewId: string, note?: string) {
@@ -106,6 +123,7 @@ export async function cancelInterview(user: CurrentUser, interviewId: string, no
     await tx.interview.update({ where: { id: iv.id }, data: { status: "CANCELADA" } });
     await recordEvent(tx, { candidateId: iv.application.candidateId, applicationId: iv.applicationId, interviewId: iv.id, type: "ENTREVISTA_CANCELADA", summary: `Entrevista de ${fmtDateTime(iv.scheduledAt, iv.hasTime)} cancelada${note ? `: ${note}` : ""}`, actorUserId: user.id });
   });
+  await notifyAgenda([iv.id], { actorId: user.id, extraDates: [{ id: iv.id, date: dateKey(iv.scheduledAt) }] });
 }
 
 // ═════════════════════════ RESULTADO DO RH ═════════════════════════
@@ -156,16 +174,7 @@ async function forwardToManager(tx: Tx, user: CurrentUser, applicationId: string
     summary: manager ? `Encaminhado para avaliação do gestor ${manager.name}` : "Aprovado pelo RH — vaga sem gestor responsável definido",
     actorUserId: user.id,
   });
-  if (manager?.email) {
-    await enqueueNotification({
-      recipientEmail: manager.email,
-      template: "recrutamento.avaliacao_gestor",
-      subject: `Riale RH — candidato aguardando sua avaliação (${job.position.title})`,
-      body: `Olá, ${manager.name.split(" ")[0]}.\n\nO RH aprovou ${app.candidate.fullName} para a vaga ${job.code} — ${job.position.title} (${job.department.unit.name} › ${job.department.name}).\n\nAcesse a plataforma para aprovar, reprovar ou solicitar nova entrevista:\n${appUrl()}/aprovacoes\n`,
-      relatedEntity: "ManagerReview",
-      relatedId: review.id,
-    });
-  }
+  // O gestor é avisado no fechamento diário (e-mail consolidado), não a cada aprovação (Fase 3).
   return review;
 }
 

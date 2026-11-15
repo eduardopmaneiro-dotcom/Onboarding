@@ -226,11 +226,26 @@ Interface: a paleta passou a ser em tons de marrom, o menu foi agrupado por proc
 contadores de pendências e atalhos "+ Candidato" e "+ Entrevista", e os módulos futuros ficam
 recolhidos em "Próximas fases".
 
-## 10. Roadmap sugerido
+## 10. Fase 3 — Comunicação com gestores (resumo)
+
+`src/modules/email/`:
+- `config` e `transport`: SMTP corporativo via nodemailer, ou Resend;
+- `outbox`: fila com trava atômica, novas tentativas e histórico;
+- `digests`: consolidação por gestor e data com versão e hash, fechamento diário, retificação e
+  rotina periódica;
+- `service`: regras de permissão da tela.
+
+Tabelas: `ManagerDigest`, `DailyClosing` e `SystemLock`; `Notification` ganhou tentativas,
+HTML, CC e vínculo com a comunicação. A rotina roda pelo cron (`/api/cron/tick`, protegido por
+`CRON_SECRET`) e, enquanto o RH usa a plataforma, a cada minuto. Detalhes em
+`docs/COMUNICACAO.md`.
+
+## 11. Roadmap sugerido
 
 | Fase | Módulos | Depende de |
 |---|---|---|
 | 2 ✅ | Vagas, Candidatos, Entrevistas, Aprovação do gestor, Importação | Concluída. Pendência: envio real de e-mails (Resend) |
-| 3 | Admissões, Colaboradores | Fase 2; integração com folha/eSocial |
+| 3 ✅ | Comunicação automática com gestores | Concluída. Pendência: credenciais do e-mail corporativo |
+| 4 | Admissões, Colaboradores | Fase 2; integração com folha/eSocial |
 | 4 | Remuneração, Pesquisa salarial | Catálogo de cargos saneado; MFA |
 | 5 | Relatórios e indicadores | Dados das fases 2–4 |

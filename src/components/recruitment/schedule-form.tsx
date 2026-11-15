@@ -88,6 +88,10 @@ export function ScheduleForm({
           </label>
         )}
         {!sequential && <input type="hidden" name="sequential" value="false" />}
+        <label className="flex items-start gap-2 rounded-lg bg-riale-50 p-3 text-sm text-stone-700">
+          <input type="checkbox" name="reviewEmail" value="true" className="mt-0.5 h-4 w-4 accent-riale-800" />
+          <span>Quero revisar o e-mail ao gestor antes do envio<span className="block text-xs text-stone-500">Sem marcar, o gestor recebe um único aviso consolidado automaticamente (todas as entrevistas dele nesta data).</span></span>
+        </label>
         <Submit className="btn-gold w-full">{selected.length > 1 ? `Agendar ${selected.length} entrevistas` : "Agendar entrevista"}</Submit>
       </div>
 

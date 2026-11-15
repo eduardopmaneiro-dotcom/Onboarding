@@ -49,8 +49,9 @@ test("Resultado do RH e decisão do gestor ficam separados; decisões em nome do
   assert.ok(rejected?.justification, "reprovação do gestor tem justificativa");
   const ivs = await prisma.interview.findMany({ where: { application: { candidateId: { in: sim.candidates } }, result: "REPROVADO" } });
   assert.ok(ivs.every((i) => i.reasonId), "toda reprovação do RH tem motivo");
+  // Fase 3: o gestor é avisado no fechamento diário consolidado — sem e-mail avulso por aprovação
   const notif = await prisma.notification.count({ where: { template: "recrutamento.avaliacao_gestor", createdAt: { gte: new Date(Date.now() - 600_000) } } });
-  assert.ok(notif >= 9, "gestor avisado por e-mail (fila)");
+  assert.equal(notif, 0, "sem e-mail avulso a cada aprovação");
 });
 
 test("Histórico registra cada etapa e é imutável", async () => {

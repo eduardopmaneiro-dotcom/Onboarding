@@ -12,7 +12,10 @@ export const SETTINGS = {
   "lgpd.candidate_retention_months": { label: "Retenção de dados de candidatos (meses)", schema: z.coerce.number().int().min(1).max(60), default: 12 },
   "lgpd.audit_retention_years": { label: "Retenção da trilha de auditoria (anos)", schema: z.coerce.number().int().min(1).max(20), default: 5 },
   "security.max_upload_mb": { label: "Tamanho máximo de documento (MB)", schema: z.coerce.number().int().min(1).max(50), default: 10 },
-  "notifications.sender_email": { label: "Remetente das comunicações", schema: z.email(), default: "rh@rialehoteis.com.br" },
+  "email.fechamento_horario": { label: "Horário do fechamento diário das entrevistas (Brasília, HH:MM)", schema: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM"), default: "18:30" },
+  "email.fechamento_automatico": { label: "Enviar o fechamento automaticamente no horário (sim/não)", schema: z.preprocess((v) => (typeof v === "string" ? ["true", "sim", "1", "s"].includes(v.trim().toLowerCase()) : v), z.boolean()), default: true },
+  "email.agenda_espera_min": { label: "Espera para consolidar o aviso de agenda (minutos, 0 = imediato)", schema: z.coerce.number().int().min(0).max(60), default: 3 },
+  "email.copia": { label: "Cópia (CC) dos e-mails aos gestores — e-mails separados por vírgula (opcional)", schema: z.string().trim().max(500).refine((v) => !v || v.split(",").every((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.trim())), "E-mail inválido na lista"), default: "" },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

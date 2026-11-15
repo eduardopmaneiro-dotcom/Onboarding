@@ -14,7 +14,7 @@ export const metadata = { title: "Entrevistas" };
 type View = "dia" | "semana" | "mes";
 const DOT: Record<string, string> = { PENDENTE: "bg-gold-500", APROVADO: "bg-emerald-600", REPROVADO: "bg-red-600", NAO_COMPARECEU: "bg-stone-400", DESISTIU: "bg-stone-400" };
 
-export default async function InterviewsPage({ searchParams }: { searchParams: Promise<{ visao?: View; data?: string; unidade?: string; entrevistador?: string; agendadas?: string }> }) {
+export default async function InterviewsPage({ searchParams }: { searchParams: Promise<{ visao?: View; data?: string; unidade?: string; entrevistador?: string; agendadas?: string; aviso?: string }> }) {
   const user = await requirePermission("entrevistas.view");
   const sp = await searchParams;
   const view: View = sp.visao === "dia" || sp.visao === "mes" ? sp.visao : "semana";
@@ -55,9 +55,21 @@ export default async function InterviewsPage({ searchParams }: { searchParams: P
       <PageHeader
         title="Entrevistas"
         subtitle="Clique em uma entrevista para registrar o resultado. Na visão diária, o registro é feito direto na lista."
-        actions={can(user, "recrutamento.manage") && <Link href={`/entrevistas/agendar?data=${day}`} className="btn-gold">+ Agendar</Link>}
+        actions={can(user, "recrutamento.manage") && (
+          <>
+            {can(user, "comunicacoes.manage") && <Link href={`/comunicacoes?data=${day}`} className="btn-ghost">Encerrar o dia / e-mails</Link>}
+            <Link href={`/entrevistas/agendar?data=${day}`} className="btn-gold">+ Agendar</Link>
+          </>
+        )}
       />
-      {sp.agendadas && <p className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">{sp.agendadas} entrevista(s) agendada(s).</p>}
+      {sp.agendadas && (
+        <p className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+          {sp.agendadas} entrevista(s) agendada(s).{" "}
+          {sp.aviso === "revisar" ? <>O aviso ao gestor aguarda sua revisão em <Link href="/comunicacoes" className="underline">Comunicação com gestores</Link>.</>
+            : sp.aviso ? <>O gestor receberá um aviso consolidado às {sp.aviso} — <Link href="/comunicacoes" className="underline">revisar ou enviar agora</Link>.</>
+            : "Datas passadas não geram aviso ao gestor."}
+        </p>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex overflow-hidden rounded-lg border border-stone-300 bg-white text-sm">

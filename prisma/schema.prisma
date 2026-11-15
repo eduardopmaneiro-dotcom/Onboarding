@@ -244,6 +244,7 @@ model Manager {
   managerReviews ManagerReview[]
   movementsFrom  MovementHistory[] @relation("MovementFromManager")
   movementsTo    MovementHistory[] @relation("MovementToManager")
+  ManagerDigest  ManagerDigest[]
 
   @@index([departmentId])
 }
@@ -722,14 +723,17 @@ enum NotificationChannel {
 }
 
 enum NotificationStatus {
-  PENDENTE
+  PENDENTE // na fila (inclui "aguardando configuração do e-mail" e novas tentativas)
+  ENVIANDO // em envio (trava contra envio duplicado)
   ENVIADA
-  FALHOU
+  FALHOU // esgotou as tentativas
   LIDA
+  CANCELADA
 }
 
-/// Fila de notificações (outbox). O envio real de e-mail é feito por um worker/integração
-/// (fase futura). Destinatário é um usuário OU um e-mail (ex.: gestor sem login).
+/// Fila de e-mails (outbox) com novas tentativas e histórico. O envio real é feito pelo
+/// provedor configurado (SMTP corporativo ou Resend). Sem configuração, a mensagem fica
+/// PENDENTE — nunca é dada como enviada sem o provedor confirmar.
 model Notification {
   id              String              @id @default(cuid())
   channel         NotificationChannel
@@ -745,10 +749,19 @@ model Notification {
   scheduledFor    DateTime            @default(now())
   sentAt          DateTime?
   readAt          DateTime?
-  error           String?
+  error           String? // último erro do provedor
+  htmlBody        String?             @db.Text
+  cc              String[]            @default([])
+  attempts        Int                 @default(0)
+  maxAttempts     Int                 @default(6)
+  nextAttemptAt   DateTime            @default(now())
+  lockedAt        DateTime?
+  providerId      String? // id da mensagem no provedor (SMTP/Resend)
+  digestId        String?             @unique
+  digest          ManagerDigest?      @relation(fields: [digestId], references: [id])
   createdAt       DateTime            @default(now())
 
-  @@index([status, scheduledFor])
+  @@index([status, nextAttemptAt])
   @@index([recipientUserId])
 }
 
@@ -795,6 +808,72 @@ model DocumentBlob {
   documentId String   @id
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
   data       Bytes
+}
+
+// ───────────────────────── COMUNICAÇÃO COM GESTORES (Fase 3) ─────────────────────────
+
+enum DigestType {
+  AGENDA // aviso consolidado de entrevistas agendadas (por gestor e data)
+  FECHAMENTO // relatório do fim do dia (por gestor e data)
+}
+
+enum DigestStatus {
+  PENDENTE // aguardando a janela de consolidação
+  AGUARDANDO_REVISAO // o RH pediu para revisar o texto antes do envio
+  EMITIDO // mensagem gerada e colocada na fila de envio
+  DESCARTADO // nada mudou desde o último envio, ou o RH optou por não enviar
+  SEM_DESTINATARIO // vaga sem gestor/e-mail — exige ação do RH
+}
+
+/// Comunicação consolidada por (tipo, gestor, data, versão). Versão > 1 = atualização/retificação.
+/// `snapshotHash` impede reenviar o mesmo conteúdo.
+model ManagerDigest {
+  id              String       @id @default(cuid())
+  type            DigestType
+  managerId       String
+  manager         Manager      @relation(fields: [managerId], references: [id])
+  date            String // AAAA-MM-DD (fuso America/Sao_Paulo)
+  version         Int          @default(1)
+  status          DigestStatus @default(PENDENTE)
+  isRectification Boolean      @default(false)
+  hold            Boolean      @default(false) // aguardar revisão do RH
+  scheduledFor    DateTime     @default(now())
+  subject         String?
+  bodyText        String?      @db.Text
+  customSubject   String?
+  customBody      String?      @db.Text
+  customForHash   String? // hash da agenda quando o texto foi editado
+  editedById      String?
+  editedAt        DateTime?
+  snapshot        Json?
+  snapshotHash    String?
+  note            String? // ex.: "texto editado descartado: a agenda mudou"
+  emittedAt       DateTime?
+  createdById     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  notification Notification?
+
+  @@unique([type, managerId, date, version])
+  @@index([status, scheduledFor])
+  @@index([date])
+}
+
+/// Fechamento da agenda de um dia (manual pelo RH ou automático no horário configurado).
+model DailyClosing {
+  date         String   @id // AAAA-MM-DD
+  mode         String // MANUAL | AUTOMATICO
+  closedAt     DateTime @default(now())
+  closedById   String?
+  pendingCount Int      @default(0) // entrevistas sem resultado no momento do fechamento
+  summary      Json?
+}
+
+/// Trava simples para tarefas periódicas (evita dois processamentos simultâneos).
+model SystemLock {
+  name        String   @id
+  lockedUntil DateTime
 }
 
 // ───────────────────────── AUDITORIA (somente inserção) ─────────────────────────

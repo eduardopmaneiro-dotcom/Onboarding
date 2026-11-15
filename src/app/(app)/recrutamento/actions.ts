@@ -87,12 +87,16 @@ export async function scheduleAction(_: ActionState, fd: FormData): Promise<Acti
   const user = await requireUser();
   const data: Record<string, unknown> & { candidateIds: string[] } = { ...formToObject(fd), candidateIds: fd.getAll("candidateIds").map(String).filter(Boolean) };
   let date = "";
+  let aviso = "";
   const r = await runAction(async () => {
     const created = await scheduleInterviews(user, data);
     date = String(data.date);
+    const n = created.notices;
+    if (n.some((x) => x.hold)) aviso = "revisar";
+    else if (n.length) aviso = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" }).format(new Date(Math.min(...n.map((x) => x.scheduledFor.getTime()))));
     return `${created.length} entrevista(s) agendada(s).`;
   }, R);
-  if (r?.ok) redirect(`/entrevistas?visao=dia&data=${date}&agendadas=${data.candidateIds.length}`);
+  if (r?.ok) redirect(`/entrevistas?visao=dia&data=${date}&agendadas=${data.candidateIds.length}${aviso ? `&aviso=${encodeURIComponent(aviso)}` : ""}`);
   return r;
 }
 

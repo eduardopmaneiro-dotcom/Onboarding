@@ -23,6 +23,8 @@ export const PERMISSION_CATALOG = {
   "aprovacoes.decidir": { module: "Recrutamento", description: "Decidir sobre candidatos encaminhados (como gestor responsável)", defaults: [A, G] },
   "aprovacoes.registrar": { module: "Recrutamento", description: "Registrar a decisão em nome de gestor sem acesso ao sistema", defaults: [A, R] },
   "importacao.executar": { module: "Recrutamento", description: "Importar a planilha de recrutamento", defaults: [A, R] },
+  "comunicacoes.view": { module: "Comunicação", description: "Ver avisos e e-mails enviados aos gestores", defaults: [A, R] },
+  "comunicacoes.manage": { module: "Comunicação", description: "Revisar/enviar avisos, encerrar o dia e emitir retificações", defaults: [A, R] },
   "admissoes.view": { module: "Admissões", description: "Acessar o módulo de admissões", defaults: [A, R] },
   "colaboradores.view": { module: "Colaboradores", description: "Acessar o módulo de colaboradores", defaults: [A, R, G] },
   "remuneracao.view": { module: "Remuneração", description: "Acessar o módulo de remuneração", defaults: [A, R] },

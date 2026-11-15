@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
 /** Rotas acessíveis sem sessão. */
-const PUBLIC = ["/login", "/recuperar-senha", "/redefinir-senha", "/primeiro-acesso", "/api/v1/health"];
+const PUBLIC = ["/login", "/recuperar-senha", "/redefinir-senha", "/primeiro-acesso", "/api/v1/health", "/api/cron"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

@@ -33,7 +33,8 @@ export function ActionForm({ action, children, className = "", resetOnSuccess = 
         onSubmit={(e) => {
           e.preventDefault();
           if (pending) return;
-          const fd = new FormData(e.currentTarget);
+          // inclui o botão clicado (ex.: "Salvar e enviar" × "Salvar")
+          const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null);
           startTransition(() => formAction(fd));
         }}
       >
