@@ -30,7 +30,7 @@ export default async function PositionsPage({ searchParams }: { searchParams: Pr
                     <tr key={p.id}>
                       <td className="font-medium text-riale-900">
                         {p.title} {p.isLeadership && <Badge tone="gold">liderança</Badge>}
-                        {p.code && <p className="font-mono text-[10px] text-slate-400">{p.code}</p>}
+                        {p.code && <p className="font-mono text-[10px] text-stone-400">{p.code}</p>}
                       </td>
                       <td><Badge tone="blue">{p.level}</Badge></td>
                       <td className="text-xs">{p.careerTrack?.name ?? "—"}</td>
@@ -46,17 +46,17 @@ export default async function PositionsPage({ searchParams }: { searchParams: Pr
           <Card title="Trilhas de carreira (RH-CAR-01)">
             <div className="grid gap-4 md:grid-cols-2">
               {tracks.map((t) => (
-                <div key={t.id} className="rounded-lg border border-slate-200 p-4">
+                <div key={t.id} className="rounded-lg border border-stone-200 p-4">
                   <div className="flex items-center justify-between">
                     <p className="font-medium text-riale-900">{t.name}</p>
-                    <span className="text-xs text-slate-400">{t._count.positions} cargo(s)</span>
+                    <span className="text-xs text-stone-400">{t._count.positions} cargo(s)</span>
                   </div>
                   {t.stages.length === 0 ? (
-                    <p className="mt-2 text-xs text-slate-400">Critérios de avanço a detalhar na fase de carreira.</p>
+                    <p className="mt-2 text-xs text-stone-400">Critérios de avanço a detalhar na fase de carreira.</p>
                   ) : (
                     <ol className="mt-2 space-y-2">
                       {t.stages.map((s) => (
-                        <li key={s.id} className="text-xs text-slate-600">
+                        <li key={s.id} className="text-xs text-stone-600">
                           <span className="font-semibold text-riale-700">{s.level}</span> · {s.typicalMonths} — {s.masteryCriteria}
                         </li>
                       ))}
@@ -69,7 +69,7 @@ export default async function PositionsPage({ searchParams }: { searchParams: Pr
         </div>
 
         {canEdit && (
-          <Card title={editing ? `Editar: ${editing.title}` : "Novo cargo"} actions={editing && <Link href="?" className="text-xs text-slate-500 hover:underline">cancelar</Link>}>
+          <Card title={editing ? `Editar: ${editing.title}` : "Novo cargo"} actions={editing && <Link href="?" className="text-xs text-stone-500 hover:underline">cancelar</Link>}>
             <ActionForm key={editing?.id ?? "new"} action={savePositionAction} className="space-y-4" resetOnSuccess={!editing}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <Field name="title" label="Nome do cargo" defaultValue={editing?.title} required />

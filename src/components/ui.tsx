@@ -11,7 +11,7 @@ export function PageHeader({ title, subtitle, actions, breadcrumb }: { title: st
           </Link>
         )}
         <h1 className="font-serif text-3xl font-semibold text-riale-900">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-sm text-stone-500">{subtitle}</p>}
       </div>
       {actions && <div className="flex gap-2">{actions}</div>}
     </div>
@@ -22,7 +22,7 @@ export function Card({ title, children, className = "", actions }: { title?: str
   return (
     <section className={`card min-w-0 ${className}`}>
       {title && (
-        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+        <header className="flex items-center justify-between border-b border-stone-100 px-5 py-3">
           <h2 className="text-sm font-semibold text-riale-900">{title}</h2>
           {actions}
         </header>
@@ -34,7 +34,7 @@ export function Card({ title, children, className = "", actions }: { title?: str
 
 const TONES = {
   green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  gray: "bg-slate-100 text-slate-600 ring-slate-200",
+  gray: "bg-stone-100 text-stone-600 ring-stone-200",
   gold: "bg-gold-100 text-gold-600 ring-gold-400/40",
   blue: "bg-riale-100 text-riale-700 ring-riale-600/20",
   red: "bg-red-50 text-red-700 ring-red-200",
@@ -49,7 +49,7 @@ export function StatusBadge({ active }: { active: boolean }) {
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="py-8 text-center text-sm text-slate-400">{children}</p>;
+  return <p className="py-8 text-center text-sm text-stone-400">{children}</p>;
 }
 
 export function TableWrap({ children }: { children: ReactNode }) {
@@ -59,9 +59,9 @@ export function TableWrap({ children }: { children: ReactNode }) {
 export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
     <div className="card p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</p>
       <p className="mt-2 font-serif text-3xl font-semibold text-riale-900">{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-stone-400">{hint}</p>}
     </div>
   );
 }

@@ -10,6 +10,8 @@ import { PERMISSION_CATALOG } from "../src/lib/permissions";
 import { prisma } from "../src/lib/prisma";
 import { protectCpf, cpfHash } from "../src/lib/cpf";
 import { hashPassword } from "../src/lib/password";
+import { DEFAULT_REASONS } from "../src/modules/recruitment/constants";
+import { simulateRecruitment } from "./demo-recruitment";
 
 try {
   process.loadEnvFile?.(".env"); // ambiente local (crypto/Prisma leem o env sob demanda); na Vercel as variáveis já vêm do ambiente
@@ -63,7 +65,7 @@ async function main() {
   const deptNames: Array<[string, string]> = [
     ["Diretoria", "DIR"], ["Recursos Humanos", "RH"], ["Recepção", "REC"], ["Governança", "GOV"],
     ["A&B — Cozinha", "COZ"], ["A&B — Salão", "SAL"], ["Reservas e Comercial", "COM"],
-    ["Manutenção", "MAN"], ["Controladoria", "CTL"],
+    ["Manutenção", "MAN"], ["Controladoria", "CTL"], ["Compras e Almoxarifado", "CMP"], ["Tecnologia da Informação", "TI"],
   ];
   const dept: Record<string, Record<string, { id: string }>> = {};
   for (const [code, unit] of Object.entries(units)) {
@@ -112,25 +114,68 @@ async function main() {
   }
 
   // ── Catálogo corporativo de cargos ──
-  const positionsDef: Array<{ key: string; title: string; level: CareerLevel; track?: string; leadership?: boolean }> = [
-    { key: "dir", title: "Gerente Geral", level: CareerLevel.N7, leadership: true },
-    { key: "recep", title: "Recepcionista", level: CareerLevel.N2, track: "Recepção e Portaria" },
-    { key: "suprec", title: "Supervisor de Recepção", level: CareerLevel.N5, track: "Recepção e Portaria", leadership: true },
-    { key: "camar", title: "Camareira", level: CareerLevel.N2, track: "Governança e Hospedagem" },
-    { key: "govern", title: "Governanta", level: CareerLevel.N5, track: "Governança e Hospedagem", leadership: true },
-    { key: "chef", title: "Chef de Cozinha", level: CareerLevel.N6, track: "A&B — Cozinha", leadership: true },
-    { key: "maitre", title: "Maître", level: CareerLevel.N5, track: "A&B — Salão", leadership: true },
-    { key: "gercom", title: "Gerente Comercial", level: CareerLevel.N6, track: "Reservas, Comercial e Eventos", leadership: true },
-    { key: "supman", title: "Supervisor de Manutenção", level: CareerLevel.N5, track: "Manutenção", leadership: true },
-    { key: "analrh", title: "Analista de RH", level: CareerLevel.N3, track: "RH, Controladoria e Marketing" },
-    { key: "coordrh", title: "Coordenador de RH", level: CareerLevel.N5, track: "RH, Controladoria e Marketing", leadership: true },
+  // Fontes: RH-ONB-02/03 (Drive) e a planilha de recrutamento do RH (set–nov/2026).
+  // `aliases` = grafias encontradas na planilha; `dept` = área padrão (sugere o departamento na vaga).
+  // Níveis dos cargos novos são PROPOSTA inicial — revisar em Cargos e carreira.
+  const REC = "Recepção", GOV = "Governança", SAL = "A&B — Salão", COZ = "A&B — Cozinha", MAN = "Manutenção", COM = "Reservas e Comercial", DIR = "Diretoria", RHD = "Recursos Humanos", CTL = "Controladoria";
+  const positionsDef: Array<{ key: string; title: string; level: CareerLevel; track?: string; leadership?: boolean; dept: string; aliases?: string[] }> = [
+    { key: "dir", title: "Gerente Geral", level: CareerLevel.N7, leadership: true, dept: DIR },
+    { key: "recep", title: "Recepcionista", level: CareerLevel.N2, track: "Recepção e Portaria", dept: REC },
+    { key: "asshosp", title: "Assistente de Hospedagem", level: CareerLevel.N2, track: "Recepção e Portaria", dept: REC },
+    { key: "mens", title: "Mensageiro", level: CareerLevel.N1, track: "Recepção e Portaria", dept: REC },
+    { key: "suprec", title: "Supervisor de Recepção", level: CareerLevel.N5, track: "Recepção e Portaria", leadership: true, dept: REC, aliases: ["sup de recepcao"] },
+    { key: "camar", title: "Camareira", level: CareerLevel.N2, track: "Governança e Hospedagem", dept: GOV },
+    { key: "assgov", title: "Assistente de Governança", level: CareerLevel.N2, track: "Governança e Hospedagem", dept: GOV, aliases: ["ass governanca", "ass de governanca", "assistente de governaca"] },
+    { key: "auxgov", title: "Auxiliar de Governança", level: CareerLevel.N1, track: "Governança e Hospedagem", dept: GOV, aliases: ["aux de governanca"] },
+    { key: "asg", title: "Auxiliar de Serviços Gerais", level: CareerLevel.N1, track: "Governança e Hospedagem", dept: GOV, aliases: ["asg", "aux de servicos gerais/eventos", "aux de servicos gerais"] },
+    { key: "supandar", title: "Supervisora de Andar", level: CareerLevel.N4, track: "Governança e Hospedagem", leadership: true, dept: GOV },
+    { key: "govern", title: "Governanta", level: CareerLevel.N5, track: "Governança e Hospedagem", leadership: true, dept: GOV },
+    { key: "garcom", title: "Garçom", level: CareerLevel.N2, track: "A&B — Salão", dept: SAL, aliases: ["garcom", "garconete"] },
+    { key: "barman", title: "Barman", level: CareerLevel.N2, track: "A&B — Salão", dept: SAL },
+    { key: "praia", title: "Atendente de Praia", level: CareerLevel.N1, track: "A&B — Salão", dept: SAL },
+    { key: "chfila", title: "Chefe de Fila", level: CareerLevel.N4, track: "A&B — Salão", leadership: true, dept: SAL, aliases: ["chef de fila"] },
+    { key: "maitre", title: "Maître", level: CareerLevel.N5, track: "A&B — Salão", leadership: true, dept: SAL, aliases: ["maitre"] },
+    { key: "gerab", title: "Gerente de A&B", level: CareerLevel.N6, track: "A&B — Salão", leadership: true, dept: SAL, aliases: ["gerente a&b", "gerente de a b"] },
+    { key: "auxcoz", title: "Auxiliar de Cozinha", level: CareerLevel.N1, track: "A&B — Cozinha", dept: COZ, aliases: ["aux de cozinha", "ajudante de cozinha"] },
+    { key: "cozinheiro", title: "Cozinheiro", level: CareerLevel.N2, track: "A&B — Cozinha", dept: COZ },
+    { key: "cozinheiro2", title: "Cozinheiro II", level: CareerLevel.N3, track: "A&B — Cozinha", dept: COZ, aliases: ["ii cozinheiro", "segundo cozinheiro"] },
+    { key: "chpartida", title: "Chefe de Partida", level: CareerLevel.N4, track: "A&B — Cozinha", leadership: true, dept: COZ },
+    { key: "chef", title: "Chef de Cozinha", level: CareerLevel.N6, track: "A&B — Cozinha", leadership: true, dept: COZ, aliases: ["chefe de cozinha"] },
+    { key: "auxman", title: "Auxiliar de Manutenção", level: CareerLevel.N2, track: "Manutenção", dept: MAN, aliases: ["aux de manutencao"] },
+    { key: "supman", title: "Supervisor de Manutenção", level: CareerLevel.N5, track: "Manutenção", leadership: true, dept: MAN },
+    { key: "assres", title: "Assistente de Reservas", level: CareerLevel.N2, track: "Reservas, Comercial e Eventos", dept: COM, aliases: ["assist de reservas"] },
+    { key: "coordres", title: "Coordenador de Reservas", level: CareerLevel.N4, track: "Reservas, Comercial e Eventos", leadership: true, dept: COM },
+    { key: "rm", title: "Revenue Manager", level: CareerLevel.N6, track: "Reservas, Comercial e Eventos", leadership: true, dept: COM, aliases: ["rm"] },
+    { key: "gercom", title: "Gerente Comercial", level: CareerLevel.N6, track: "Reservas, Comercial e Eventos", leadership: true, dept: COM },
+    { key: "almox", title: "Assistente de Almoxarifado", level: CareerLevel.N2, track: "RH, Controladoria e Marketing", dept: "Compras e Almoxarifado" },
+    { key: "ti", title: "Analista de TI", level: CareerLevel.N3, dept: "Tecnologia da Informação", aliases: ["ti"] },
+    { key: "analfin", title: "Analista Financeiro", level: CareerLevel.N3, track: "RH, Controladoria e Marketing", dept: CTL },
+    { key: "analrh", title: "Analista de RH", level: CareerLevel.N3, track: "RH, Controladoria e Marketing", dept: RHD },
+    { key: "coordrh", title: "Coordenador de RH", level: CareerLevel.N5, track: "RH, Controladoria e Marketing", leadership: true, dept: RHD },
   ];
   const pos: Record<string, { id: string }> = {};
   for (const p of positionsDef) {
-    pos[p.key] = await prisma.position.upsert({
-      where: { title: p.title },
+    const existing = await prisma.position.findUnique({ where: { title: p.title } });
+    if (existing) {
+      // Não sobrescreve edições: só completa área padrão vazia e acrescenta grafias novas
+      const aliases = [...new Set([...existing.aliases, ...(p.aliases ?? [])])];
+      pos[p.key] = await prisma.position.update({
+        where: { id: existing.id },
+        data: { defaultDepartmentName: existing.defaultDepartmentName ?? p.dept, aliases },
+      });
+    } else {
+      pos[p.key] = await prisma.position.create({
+        data: { title: p.title, level: p.level, isLeadership: !!p.leadership, careerTrackId: p.track ? tracks[p.track].id : null, defaultDepartmentName: p.dept, aliases: p.aliases ?? [] },
+      });
+    }
+  }
+
+  // ── Motivos padronizados de reprovação ──
+  for (const [i, r] of DEFAULT_REASONS.entries()) {
+    await prisma.rejectionReason.upsert({
+      where: { code: r.code },
       update: {},
-      create: { title: p.title, level: p.level, isLeadership: !!p.leadership, careerTrackId: p.track ? tracks[p.track].id : null },
+      create: { code: r.code, label: r.label, requiresNote: !!r.requiresNote, active: r.active ?? true, order: i + 1 },
     });
   }
 
@@ -214,6 +259,12 @@ async function main() {
         create: { id: `cit-${idx}-${j}`, stageTemplateId: st.id, title, type, dueDayOffset: offset, order: j + 1 },
       });
     }
+  }
+
+  // ── Recrutamento de demonstração (24 candidatos fictícios) — só se ainda não houver vagas ──
+  if (demo && (await prisma.jobOpening.count({ where: { isHistorical: false } })) === 0) {
+    const r = await simulateRecruitment(prisma);
+    console.log(`Recrutamento simulado: ${r.jobs.length} vagas, ${r.candidates.length} candidatos.`);
   }
 
   console.log(`Seed concluído (${demo ? "estrutura + demonstração" : "estrutura"}).`);

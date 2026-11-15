@@ -17,14 +17,14 @@ export async function ComingSoon({ href, prepared }: { href: string; prepared: s
           <div>
             <span className="inline-flex rounded-full bg-riale-100 px-2.5 py-0.5 text-xs font-medium text-riale-700">{item.phase}</span>
             <h2 className="mt-2 font-serif text-2xl text-riale-900">Módulo em desenvolvimento</h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            <p className="mt-1 max-w-2xl text-sm text-stone-500">
               A estrutura de dados, as permissões e a rota já estão prontas; as telas e regras de negócio entram na próxima etapa do projeto.
             </p>
           </div>
         </div>
-        <div className="border-t border-slate-100 bg-slate-50/60 px-8 py-5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Já preparado na fundação</p>
-          <ul className="mt-2 grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
+        <div className="border-t border-stone-100 bg-stone-50/60 px-8 py-5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Já preparado na fundação</p>
+          <ul className="mt-2 grid gap-1 text-sm text-stone-600 sm:grid-cols-2">
             {prepared.map((p) => (
               <li key={p} className="flex gap-2">
                 <span className="text-gold-500">✓</span>

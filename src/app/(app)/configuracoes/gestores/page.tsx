@@ -36,18 +36,18 @@ export default async function ManagersPage({ searchParams }: { searchParams: Pro
                     <tr key={m.id}>
                       <td>
                         <p className="font-medium text-riale-900">{m.name}</p>
-                        <p className="text-xs text-slate-500">{m.email}</p>
+                        <p className="text-xs text-stone-500">{m.email}</p>
                       </td>
                       <td className="whitespace-nowrap">
-                        {m.hasCpf ? pii ? <RevealCpf masked={m.cpfMasked} reveal={revealManagerCpfAction.bind(null, m.id)} /> : <span className="font-mono text-xs text-slate-500">{m.cpfMasked}</span> : null}
-                        {m.internalId && <p className="font-mono text-xs text-slate-500">Mat. {m.internalId}</p>}
+                        {m.hasCpf ? pii ? <RevealCpf masked={m.cpfMasked} reveal={revealManagerCpfAction.bind(null, m.id)} /> : <span className="font-mono text-xs text-stone-500">{m.cpfMasked}</span> : null}
+                        {m.internalId && <p className="font-mono text-xs text-stone-500">Mat. {m.internalId}</p>}
                       </td>
                       <td>{m.position.title}</td>
                       <td>
                         <p>{m.department.name}</p>
-                        <p className="text-xs text-slate-400">{m.department.unit.name}</p>
+                        <p className="text-xs text-stone-400">{m.department.unit.name}</p>
                       </td>
-                      <td>{m.directSuperior?.name ?? <span className="text-slate-400">—</span>}</td>
+                      <td>{m.directSuperior?.name ?? <span className="text-stone-400">—</span>}</td>
                       <td className="space-y-1">
                         <StatusBadge active={m.active} />
                         {m.user && <div><Badge tone="blue">com acesso</Badge></div>}
@@ -61,7 +61,7 @@ export default async function ManagersPage({ searchParams }: { searchParams: Pro
           )}
         </Card>
 
-        <Card title={editing ? `Editar: ${editing.name}` : "Novo gestor"} actions={editing && <Link href="?" className="text-xs text-slate-500 hover:underline">cancelar</Link>}>
+        <Card title={editing ? `Editar: ${editing.name}` : "Novo gestor"} actions={editing && <Link href="?" className="text-xs text-stone-500 hover:underline">cancelar</Link>}>
           <ActionForm key={editing?.id ?? "new"} action={saveManagerAction} className="space-y-4" resetOnSuccess={!editing}>
             {editing && <input type="hidden" name="id" value={editing.id} />}
             <Field name="name" label="Nome completo" defaultValue={editing?.name} required />

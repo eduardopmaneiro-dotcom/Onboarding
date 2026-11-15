@@ -40,8 +40,10 @@ const ok = (c, m) => { if (!c) throw new Error(m); console.log("  ✓ " + m); };
   ok(await p.isVisible("text=já foi concluída"), "tela de primeiro acesso fica fechada");
   await p.goto(B + "/login"); await p.fill("#cpf", ADMIN_CPF); await p.fill("#password", "Riale#Admin2026");
   await Promise.all([p.waitForURL(/dashboard/), p.click("button[type=submit]")]);
-  const n = await p.$$eval("aside nav a", a => a.length);
-  ok(n === 11, "login com seu CPF → dashboard com os 11 itens de menu");
+  const fut = p.locator("aside button:has-text('Próximas fases')"); if (await fut.count()) await fut.click();
+  const labels = await p.$$eval("aside nav a", (a) => a.map((x) => x.querySelector("span.flex-1")?.textContent?.trim()));
+  const required = ["Dashboard", "Vagas", "Candidatos", "Entrevistas", "Admissões", "Colaboradores", "Remuneração", "Pesquisa salarial", "Cargos e carreira", "Relatórios", "Configurações"];
+  ok(required.every((r) => labels.includes(r)), "login com o CPF autorizado → dashboard com os 11 módulos no menu");
   await p.screenshot({ path: "tests/e2e/screenshots/pa-dashboard.png" });
   // cadastra gestor + usuário gestor + usuário RH
   await p.goto(B + "/configuracoes/gestores");

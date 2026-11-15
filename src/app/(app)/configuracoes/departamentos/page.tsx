@@ -23,9 +23,9 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
           actions={
             units.length > 1 && (
               <div className="flex flex-wrap gap-1 text-xs">
-                <Link href="?" className={`rounded px-2 py-1 ${!unidade ? "bg-riale-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>Todas</Link>
+                <Link href="?" className={`rounded px-2 py-1 ${!unidade ? "bg-riale-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}>Todas</Link>
                 {units.map((u) => (
-                  <Link key={u.id} href={`?unidade=${u.id}`} className={`rounded px-2 py-1 ${unidade === u.id ? "bg-riale-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{u.name}</Link>
+                  <Link key={u.id} href={`?unidade=${u.id}`} className={`rounded px-2 py-1 ${unidade === u.id ? "bg-riale-900 text-white" : "text-stone-600 hover:bg-stone-100"}`}>{u.name}</Link>
                 ))}
               </div>
             )
@@ -37,7 +37,7 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
               <tbody>
                 {departments.map((d) => (
                   <tr key={d.id}>
-                    <td className="font-medium text-riale-900">{d.name} {d.code && <span className="ml-1 font-mono text-[10px] text-slate-400">{d.code}</span>}</td>
+                    <td className="font-medium text-riale-900">{d.name} {d.code && <span className="ml-1 font-mono text-[10px] text-stone-400">{d.code}</span>}</td>
                     <td>{d.unit.name}</td>
                     <td>{d._count.managers}</td>
                     <td><StatusBadge active={d.active} /></td>
@@ -48,7 +48,7 @@ export default async function DepartmentsPage({ searchParams }: { searchParams: 
             </table>
           </TableWrap>
         </Card>
-        <Card title={editing ? `Editar: ${editing.name}` : "Novo departamento"} actions={editing && <Link href="?" className="text-xs text-slate-500 hover:underline">cancelar</Link>}>
+        <Card title={editing ? `Editar: ${editing.name}` : "Novo departamento"} actions={editing && <Link href="?" className="text-xs text-stone-500 hover:underline">cancelar</Link>}>
           <ActionForm key={editing?.id ?? "new"} action={saveDepartmentAction} className="space-y-4" resetOnSuccess={!editing}>
             {editing && <input type="hidden" name="id" value={editing.id} />}
             <SelectField name="unitId" label="Unidade" options={unitOptions} defaultValue={editing?.unit.id ?? unidade} placeholder="Selecione…" required />

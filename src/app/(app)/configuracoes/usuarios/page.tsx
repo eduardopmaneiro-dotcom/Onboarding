@@ -40,12 +40,12 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                   <tr key={u.id}>
                     <td>
                       <p className="font-medium text-riale-900">{u.name}</p>
-                      <p className="text-xs text-slate-500">{u.email}</p>
+                      <p className="text-xs text-stone-500">{u.email}</p>
                     </td>
-                    <td className="whitespace-nowrap">{pii ? <RevealCpf masked={u.cpfMasked} reveal={revealUserCpfAction.bind(null, u.id)} /> : <span className="font-mono text-xs text-slate-500">{u.cpfMasked}</span>}</td>
+                    <td className="whitespace-nowrap">{pii ? <RevealCpf masked={u.cpfMasked} reveal={revealUserCpfAction.bind(null, u.id)} /> : <span className="font-mono text-xs text-stone-500">{u.cpfMasked}</span>}</td>
                     <td><Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge></td>
                     <td className="text-xs">{u.role === "GESTOR" ? u.manager?.name ?? "—" : u.unit?.name ?? "Todas as unidades"}</td>
-                    <td className="text-xs text-slate-500">{u.lastLoginAt?.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) ?? "nunca"}</td>
+                    <td className="text-xs text-stone-500">{u.lastLoginAt?.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) ?? "nunca"}</td>
                     <td className="space-y-1">
                       <StatusBadge active={u.active} />
                       {u.lockedUntil && u.lockedUntil > new Date() && <div><Badge tone="red">bloqueado</Badge></div>}
@@ -61,7 +61,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
 
         {canManage && (
           <div className="space-y-6">
-            <Card title={editing ? `Editar: ${editing.name}` : "Novo usuário"} actions={editing && <Link href="?" className="text-xs text-slate-500 hover:underline">cancelar</Link>}>
+            <Card title={editing ? `Editar: ${editing.name}` : "Novo usuário"} actions={editing && <Link href="?" className="text-xs text-stone-500 hover:underline">cancelar</Link>}>
               <ActionForm key={editing?.id ?? "new"} action={saveUserAction} className="space-y-4" resetOnSuccess={!editing}>
                 {editing && <input type="hidden" name="id" value={editing.id} />}
                 <Field name="name" label="Nome completo" defaultValue={editing?.name} required />
@@ -85,7 +85,7 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
                 <ActionForm action={adminResetPasswordAction} className="space-y-4" resetOnSuccess>
                   <input type="hidden" name="id" value={editing.id} />
                   <Field name="password" label="Senha temporária" type="password" autoComplete="new-password" required />
-                  <p className="text-xs text-slate-500">Desbloqueia o acesso e obriga a troca no próximo login. Prefira orientar o usuário a usar “Esqueci minha senha”.</p>
+                  <p className="text-xs text-stone-500">Desbloqueia o acesso e obriga a troca no próximo login. Prefira orientar o usuário a usar “Esqueci minha senha”.</p>
                   <Submit className="btn-ghost">Definir senha temporária</Submit>
                 </ActionForm>
               </Card>

@@ -1,102 +1,130 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { can, requirePermission } from "@/lib/session";
-import { NAVIGATION } from "@/lib/navigation";
+import { addDays, fmtDateTime, localToDate, timeKey, todayKey } from "@/lib/datetime";
 import { ROLE_LABEL } from "@/lib/permissions";
-import { unitScope } from "@/modules/shared/scope";
-import { Badge, Card, PageHeader, Stat } from "@/components/ui";
+import { listInterviews, listReviews, pendingResults } from "@/modules/recruitment/workflow";
+import { jobScopeWhere } from "@/modules/recruitment/scope";
+import { RESULT_LABEL, RESULT_TONE } from "@/modules/recruitment/constants";
+import { Badge, Card, Empty, PageHeader } from "@/components/ui";
 
 export const metadata = { title: "Dashboard" };
 
-const ACTION_LABEL: Record<string, string> = {
-  CREATE: "criou", UPDATE: "alterou", STATUS_CHANGE: "alterou status de", LOGIN: "entrou no sistema", LOGIN_FAILED: "falha de login", LOGOUT: "saiu",
-  PII_ACCESS: "visualizou CPF de", PERMISSION_CHANGE: "alterou permissão", PASSWORD_RESET: "redefiniu senha", PASSWORD_CHANGE: "trocou a senha",
-  PASSWORD_RESET_REQUEST: "pediu recuperação de senha", ACCESS_DENIED: "teve acesso negado", DOCUMENT_UPLOAD: "enviou documento", DOCUMENT_DOWNLOAD: "baixou documento",
-};
+function Kpi({ href, label, value, hint, tone = "default" }: { href: string; label: string; value: number | string; hint?: string; tone?: "default" | "alert" }) {
+  return (
+    <Link href={href} className={`card block p-5 transition hover:border-gold-400 hover:shadow-md ${tone === "alert" && Number(value) > 0 ? "border-gold-400 bg-gold-100/40" : ""}`}>
+      <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</p>
+      <p className="mt-1 font-serif text-4xl font-semibold text-riale-900">{value}</p>
+      {hint && <p className="mt-1 text-xs text-stone-400">{hint}</p>}
+    </Link>
+  );
+}
 
 export default async function Dashboard() {
   const user = await requirePermission("dashboard.view");
-  const scope = unitScope(user);
-  const deptWhere = scope ? { unitId: scope, active: true } : { active: true };
-
-  const [units, departments, positions, managers, users, deptsWithoutManager, recent] = await Promise.all([
-    prisma.unit.count({ where: scope ? { id: scope, active: true } : { active: true } }),
-    prisma.department.count({ where: deptWhere }),
-    prisma.position.count({ where: { active: true } }),
-    prisma.manager.count({ where: { active: true, department: deptWhere } }),
-    can(user, "users.view") ? prisma.user.count({ where: { active: true, ...(scope ? { unitId: scope } : {}) } }) : Promise.resolve(null),
-    prisma.department.findMany({ where: { ...deptWhere, managers: { none: { active: true } } }, include: { unit: true }, orderBy: [{ unit: { name: "asc" } }, { name: "asc" }], take: 8 }),
-    can(user, "audit.view")
-      ? prisma.auditLog.findMany({ where: user.role === "ADMIN" ? {} : { OR: [{ actorRole: null }, { actorRole: { not: "ADMIN" } }] }, orderBy: { createdAt: "desc" }, take: 8, include: { actor: { select: { name: true } } } })
-      : Promise.resolve([]),
+  const today = todayKey();
+  const jobs = jobScopeWhere(user);
+  const since = localToDate(addDays(today, -30));
+  const [todayList, pending, reviews, openJobs, externalWaiting, last30, reasonsAgg, reasonList] = await Promise.all([
+    can(user, "entrevistas.view") ? listInterviews(user, localToDate(today), localToDate(addDays(today, 1))) : Promise.resolve([]),
+    pendingResults(user),
+    can(user, "aprovacoes.view") ? listReviews(user, "PENDENTE") : Promise.resolve([]),
+    prisma.jobOpening.count({ where: { ...jobs, status: "ABERTA" } }),
+    prisma.application.count({ where: { jobOpening: jobs, externalCheckStatus: "AGUARDANDO" } }),
+    prisma.interview.groupBy({ by: ["result"], _count: true, where: { application: { jobOpening: jobs }, scheduledAt: { gte: since }, status: { not: "CANCELADA" } } }),
+    prisma.interview.groupBy({ by: ["reasonId"], _count: true, where: { application: { jobOpening: jobs }, result: "REPROVADO", reasonId: { not: null } }, orderBy: { _count: { reasonId: "desc" } }, take: 6 }),
+    prisma.rejectionReason.findMany(),
   ]);
-
-  const modules = NAVIGATION.filter((n) => n.href !== "/dashboard" && user.permissions.has(n.permission));
+  const total30 = last30.reduce((s, x) => s + x._count, 0);
+  const approved30 = last30.find((x) => x.result === "APROVADO")?._count ?? 0;
+  const decided30 = last30.filter((x) => x.result !== "PENDENTE").reduce((s, x) => s + x._count, 0);
+  const maxReason = Math.max(1, ...reasonsAgg.map((r) => r._count));
+  const gestor = user.role === "GESTOR";
 
   return (
     <>
-      <PageHeader title={`Olá, ${user.name.split(" ")[0]}`} subtitle={`${ROLE_LABEL[user.role]} · visão ${scope ? "da sua unidade" : "consolidada do grupo"}`} />
+      <PageHeader title={`Olá, ${user.name.split(" ")[0]}`} subtitle={`${ROLE_LABEL[user.role]} · ${new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", day: "2-digit", month: "long" }).format(new Date())}`} />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Stat label="Unidades" value={units} />
-        <Stat label="Departamentos" value={departments} />
-        <Stat label="Cargos (catálogo)" value={positions} />
-        <Stat label="Gestores ativos" value={managers} />
-        {users !== null && <Stat label="Usuários ativos" value={users} />}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {gestor ? (
+          <>
+            <Kpi href="/aprovacoes" label="Aguardando sua decisão" value={reviews.length} tone="alert" hint="Candidatos aprovados pelo RH" />
+            <Kpi href="/vagas" label="Suas vagas abertas" value={openJobs} />
+            <Kpi href="/entrevistas?visao=dia" label="Entrevistas hoje" value={todayList.length} />
+            <Kpi href="/entrevistas" label="Entrevistas (30 dias)" value={total30} />
+          </>
+        ) : (
+          <>
+            <Kpi href="/entrevistas?visao=dia" label="Entrevistas hoje" value={todayList.length} />
+            <Kpi href="#pendentes" label="Resultados a registrar" value={pending.length} tone="alert" hint="Entrevistas passadas sem resultado" />
+            <Kpi href="/aprovacoes" label="Aguardando gestor" value={reviews.length} tone="alert" />
+            <Kpi href="/vagas" label="Vagas abertas" value={openJobs} hint={externalWaiting ? `${externalWaiting} candidato(s) na avaliação externa` : undefined} />
+          </>
+        )}
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-3">
-        <Card title="Módulos da plataforma" className="xl:col-span-2">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {modules.map((m) => (
-              <Link key={m.href} href={m.href} className="rounded-lg border border-slate-200 p-4 transition hover:border-gold-400 hover:shadow-sm">
-                <div className="flex items-center justify-between">
-                  <p className="font-medium text-riale-900">{m.label}</p>
-                  {m.ready ? <Badge tone="green">Disponível</Badge> : <Badge tone="gold">{m.phase?.split(" — ")[0]}</Badge>}
-                </div>
-                <p className="mt-1 text-xs text-slate-500">{m.description}</p>
-              </Link>
-            ))}
-          </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <Card title="Entrevistas de hoje" actions={<Link href="/entrevistas?visao=dia" className="text-xs font-medium text-gold-600 hover:underline">abrir agenda →</Link>}>
+          {todayList.length === 0 ? <Empty>Nenhuma entrevista hoje.</Empty> : (
+            <ul className="divide-y divide-stone-100">
+              {todayList.map((i) => (
+                <li key={i.id} className="flex items-center gap-3 py-2.5">
+                  <span className="w-12 font-mono text-sm text-riale-900">{i.hasTime ? timeKey(i.scheduledAt) : "—"}</span>
+                  <Link href={`/entrevistas/${i.id}`} className="flex-1 text-sm hover:underline"><span className="font-medium text-riale-900">{i.application.candidate.fullName}</span><span className="block text-xs text-stone-400">{i.application.jobOpening.position.title} · {i.application.jobOpening.department.unit.name}</span></Link>
+                  <Badge tone={RESULT_TONE[i.result]}>{RESULT_LABEL[i.result]}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
-        <div className="space-y-6">
-          <Card title="Departamentos sem gestor">
-            {deptsWithoutManager.length === 0 ? (
-              <p className="text-sm text-slate-500">Todos os departamentos ativos têm gestor.</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {deptsWithoutManager.map((d) => (
-                  <li key={d.id} className="flex justify-between">
-                    <span className="text-slate-700">{d.name}</span>
-                    <span className="text-xs text-slate-400">{d.unit.name}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {can(user, "managers.manage") && (
-              <Link href="/configuracoes/gestores" className="mt-4 inline-block text-xs font-medium text-gold-600 hover:underline">Cadastrar gestores →</Link>
+        {gestor ? (
+          <Card title="Candidatos aguardando sua decisão" actions={<Link href="/aprovacoes" className="text-xs font-medium text-gold-600 hover:underline">decidir →</Link>}>
+            {reviews.length === 0 ? <Empty>Nada pendente.</Empty> : (
+              <ul className="divide-y divide-stone-100">{reviews.slice(0, 8).map((r) => <li key={r.id} className="py-2.5 text-sm"><Link href="/aprovacoes" className="font-medium text-riale-900 hover:underline">{r.application.candidate.fullName}</Link><span className="block text-xs text-stone-400">{r.application.jobOpening.position.title} · desde {fmtDateTime(r.requestedAt)}</span></li>)}</ul>
             )}
           </Card>
+        ) : (
+          <Card title="Resultados a registrar" actions={pending.length > 0 && <span className="text-xs text-stone-400">mais antigos primeiro</span>}>
+            <div id="pendentes" />
+            {pending.length === 0 ? <Empty>Tudo em dia.</Empty> : (
+              <ul className="divide-y divide-stone-100">
+                {pending.slice(0, 8).map((i) => (
+                  <li key={i.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                    <span><span className="font-medium text-riale-900">{i.application.candidate.fullName}</span><span className="block text-xs text-stone-400">{i.application.jobOpening.position.title} · {fmtDateTime(i.scheduledAt, i.hasTime)}</span></span>
+                    <Link href={`/entrevistas/${i.id}`} className="btn-primary btn-sm">Registrar</Link>
+                  </li>
+                ))}
+                {pending.length > 8 && <li className="pt-2 text-xs text-stone-500">e mais {pending.length - 8}…</li>}
+              </ul>
+            )}
+          </Card>
+        )}
+      </div>
 
-          {recent.length > 0 && (
-            <Card title="Atividade recente">
-              <ul className="space-y-3 text-sm">
-                {recent.map((r) => (
-                  <li key={r.id}>
-                    <p className="text-slate-700">
-                      <span className="font-medium">{r.actor?.name ?? "Anônimo"}</span> {ACTION_LABEL[r.action] ?? r.action.toLowerCase()}{" "}
-                      {!["User", "Auth"].includes(r.entityType) && <span className="text-slate-500">{r.entityType}</span>}
-                    </p>
-                    <p className="text-xs text-slate-400">{r.createdAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</p>
+      {!gestor && (
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <Card title="Últimos 30 dias">
+            <dl className="grid grid-cols-3 gap-4 text-center">
+              <div><dt className="text-xs text-stone-500">Entrevistas</dt><dd className="font-serif text-3xl text-riale-900">{total30}</dd></div>
+              <div><dt className="text-xs text-stone-500">Com resultado</dt><dd className="font-serif text-3xl text-riale-900">{decided30}</dd></div>
+              <div><dt className="text-xs text-stone-500">Aprovação RH</dt><dd className="font-serif text-3xl text-riale-900">{decided30 ? `${Math.round((approved30 / decided30) * 100)}%` : "—"}</dd></div>
+            </dl>
+          </Card>
+          <Card title="Principais motivos de reprovação (histórico)">
+            {reasonsAgg.length === 0 ? <Empty>Sem reprovações registradas.</Empty> : (
+              <ul className="space-y-2">
+                {reasonsAgg.map((r) => (
+                  <li key={r.reasonId} className="text-sm">
+                    <div className="flex justify-between"><span className="text-stone-700">{reasonList.find((x) => x.id === r.reasonId)?.label}</span><span className="font-medium text-riale-900">{r._count}</span></div>
+                    <div className="mt-1 h-2 rounded-full bg-riale-50"><div className="h-2 rounded-full bg-gold-500" style={{ width: `${(r._count / maxReason) * 100}%` }} /></div>
                   </li>
                 ))}
               </ul>
-              <Link href="/configuracoes/auditoria" className="mt-4 inline-block text-xs font-medium text-gold-600 hover:underline">Ver auditoria completa →</Link>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
-      </div>
+      )}
     </>
   );
 }

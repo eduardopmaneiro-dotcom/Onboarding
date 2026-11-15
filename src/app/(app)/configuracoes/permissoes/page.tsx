@@ -33,10 +33,10 @@ export default async function PermissionsPage() {
             <tbody>
               {matrix.map((p) => (
                 <tr key={p.id}>
-                  <td className="text-xs font-medium uppercase tracking-wide text-slate-500">{p.module}</td>
+                  <td className="text-xs font-medium uppercase tracking-wide text-stone-500">{p.module}</td>
                   <td>
-                    <p className="text-slate-800">{p.description}</p>
-                    <p className="font-mono text-[11px] text-slate-400">{p.code}</p>
+                    <p className="text-stone-800">{p.description}</p>
+                    <p className="font-mono text-[11px] text-stone-400">{p.code}</p>
                   </td>
                   {ROLES.map((r) => (
                     <td key={r} className="text-center">

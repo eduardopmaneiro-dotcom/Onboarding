@@ -20,7 +20,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
             <RialeLogo />
           </div>
           <h1 className="font-serif text-3xl font-semibold text-riale-900">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
+          {subtitle && <p className="mt-1 text-sm text-stone-500">{subtitle}</p>}
           <div className="mt-8">{children}</div>
         </div>
       </div>

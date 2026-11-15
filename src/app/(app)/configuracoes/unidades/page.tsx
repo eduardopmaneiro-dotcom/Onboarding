@@ -42,7 +42,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
         </Card>
 
         {canEdit ? (
-          <Card title={editing ? `Editar: ${editing.name}` : "Nova unidade"} actions={editing && <Link href="?" className="text-xs text-slate-500 hover:underline">cancelar</Link>}>
+          <Card title={editing ? `Editar: ${editing.name}` : "Nova unidade"} actions={editing && <Link href="?" className="text-xs text-stone-500 hover:underline">cancelar</Link>}>
             <ActionForm key={editing?.id ?? "new"} action={saveUnitAction} className="space-y-4" resetOnSuccess={!editing}>
               {editing && <input type="hidden" name="id" value={editing.id} />}
               <Field name="name" label="Nome" defaultValue={editing?.name} required />
@@ -56,7 +56,7 @@ export default async function UnitsPage({ searchParams }: { searchParams: Promis
             </ActionForm>
           </Card>
         ) : (
-          <Card title="Somente leitura"><p className="text-sm text-slate-500">O cadastro de unidades é feito pelo Administrador ou pelo RH corporativo.</p></Card>
+          <Card title="Somente leitura"><p className="text-sm text-stone-500">O cadastro de unidades é feito pelo Administrador ou pelo RH corporativo.</p></Card>
         )}
       </div>
     </>

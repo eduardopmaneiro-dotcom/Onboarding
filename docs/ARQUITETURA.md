@@ -204,11 +204,33 @@ com escopo e prazo, ligados a um "usuário técnico". A camada de serviço não 
 | Upload de documentos só pela API | Ainda não há tela de anexos | Entra em Admissões e Candidatos |
 | Gestor sem visão "minha equipe" | O perfil Gestor tem pouco uso real nesta fase | Entra com Colaboradores e Vagas |
 
-## 9. Roadmap sugerido
+## 9. Fase 2 — Recrutamento (resumo)
+
+Módulo em `src/modules/recruitment/` (vagas, candidatos, fluxo RH → gestor, histórico) e
+`src/modules/import/` (leitura da planilha, regras de interpretação e importação em etapas).
+As tabelas novas e alteradas são:
+- `JobOpening`: código por sequência no banco, salário previsto, escala, turno e jornada;
+- `Candidate`: nome e telefone normalizados para checar duplicidade;
+- `Application`: pretensão salarial e avaliação externa;
+- `Interview`: resultado do RH e motivo;
+- `ManagerReview`: decisão do gestor, separada da do RH;
+- `RejectionReason`: motivos editáveis;
+- `CandidateEvent`: histórico somente-inserção;
+- `ImportBatch` e `ImportRow`: importação revisável.
+
+Também foram acrescentadas travas no banco: reprovação sem motivo e reprovação do gestor sem
+justificativa são recusadas, e o histórico não aceita alteração. Detalhes, regras e a análise
+da planilha real estão em `docs/RECRUTAMENTO.md`.
+
+Interface: a paleta passou a ser em tons de marrom, o menu foi agrupado por processo com
+contadores de pendências e atalhos "+ Candidato" e "+ Entrevista", e os módulos futuros ficam
+recolhidos em "Próximas fases".
+
+## 10. Roadmap sugerido
 
 | Fase | Módulos | Depende de |
 |---|---|---|
-| 2 | Vagas, Candidatos, Entrevistas | Worker de e-mail (convites a gestores e candidatos) |
+| 2 ✅ | Vagas, Candidatos, Entrevistas, Aprovação do gestor, Importação | Concluída. Pendência: envio real de e-mails (Resend) |
 | 3 | Admissões, Colaboradores | Fase 2; integração com folha/eSocial |
 | 4 | Remuneração, Pesquisa salarial | Catálogo de cargos saneado; MFA |
 | 5 | Relatórios e indicadores | Dados das fases 2–4 |

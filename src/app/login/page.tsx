@@ -56,7 +56,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       </form>
       <div className="mt-6 flex items-center justify-between text-sm">
         <Link href="/recuperar-senha" className="font-medium text-gold-600 hover:underline">Esqueci minha senha</Link>
-        <span className="text-xs text-slate-400">Primeiro acesso? Fale com o RH.</span>
+        <span className="text-xs text-stone-400">Primeiro acesso? Fale com o RH.</span>
       </div>
     </AuthShell>
   );

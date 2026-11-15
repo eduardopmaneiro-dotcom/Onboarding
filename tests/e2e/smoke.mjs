@@ -48,9 +48,14 @@ async function login(page, cpf, password = PASS) {
   await Promise.all([page.waitForLoadState("networkidle"), page.click("button[type=submit]")]);
 }
 
-async function sidebarLabels(page) {
+async function sidebarLabels(page, withFuture = true) {
+  if (withFuture) {
+    const btn = page.locator("aside button:has-text('Próximas fases')");
+    if (await btn.count()) await btn.click();
+  }
   return page.$$eval("aside nav a", (as) => as.map((a) => a.querySelector("span.flex-1")?.textContent?.trim()));
 }
+const REQUIRED_MENU = ["Dashboard", "Vagas", "Candidatos", "Entrevistas", "Admissões", "Colaboradores", "Remuneração", "Pesquisa salarial", "Cargos e carreira", "Relatórios", "Configurações"];
 
 const browser = await chromium.launch();
 const ctx = () => browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -90,17 +95,17 @@ await step("CPF sem senha não autentica (inclusive administrador)", async () =>
 });
 
 // ── Perfil ADMIN ──
-await step("ADMIN: login, menu com 11 itens e todas as configurações", async () => {
+await step("ADMIN: login, menu com os 11 módulos exigidos e todas as configurações", async () => {
   const c = await ctx();
   const p = await c.newPage();
   await login(p, USERS.admin);
   assert(p.url().endsWith("/dashboard"), p.url());
   const labels = await sidebarLabels(p);
-  assert(labels.length === 11, `menu: ${labels.join(", ")}`);
-  assert(labels[0] === "Dashboard" && labels[10] === "Configurações", labels.join(","));
+  for (const l of REQUIRED_MENU) assert(labels.includes(l), `falta ${l}: ${labels.join(", ")}`);
+  assert(labels[0] === "Dashboard", labels.join(","));
   await p.screenshot({ path: `${SHOTS}/02-dashboard-admin.png`, fullPage: true });
   await p.goto(`${BASE}/configuracoes`);
-  assert((await p.$$("main a.card")).length === 8, "seções de configuração");
+  assert((await p.$$("main a.card")).length === 9, "seções de configuração");
   await p.goto(`${BASE}/configuracoes/permissoes`);
   assert(await p.isVisible("text=Matriz de permissões"), "permissões");
   await p.screenshot({ path: `${SHOTS}/03-permissoes.png`, fullPage: true });
@@ -230,7 +235,7 @@ await step("RH de unidade: vê configurações, mas não permissões/sistema; es
   const p = await c.newPage();
   await login(p, USERS.rhBrisa);
   const labels = await sidebarLabels(p);
-  assert(labels.includes("Configurações") && labels.length === 11, labels.join(","));
+  assert(labels.includes("Configurações") && labels.includes("Importar planilha"), labels.join(","));
   await p.goto(`${BASE}/configuracoes/permissoes`);
   assert(p.url().endsWith("/acesso-negado"), p.url());
   await p.goto(`${BASE}/configuracoes/sistema`);
@@ -245,18 +250,20 @@ await step("RH de unidade: vê configurações, mas não permissões/sistema; es
 });
 
 // ── Perfil GESTOR ──
-await step("GESTOR: menu sem Configurações/Remuneração; áreas restritas negadas; módulo futuro sinalizado", async () => {
+await step("GESTOR: menu sem Configurações/Remuneração/Importação; áreas restritas negadas; módulo futuro sinalizado", async () => {
   const c = await ctx();
   const p = await c.newPage();
   await login(p, USERS.gestor);
   const labels = await sidebarLabels(p);
-  for (const hidden of ["Configurações", "Remuneração", "Pesquisa salarial", "Candidatos", "Admissões"]) assert(!labels.includes(hidden), `${hidden} visível`);
-  assert(labels.includes("Vagas") && labels.includes("Cargos e carreira"), labels.join(","));
+  for (const hidden of ["Configurações", "Remuneração", "Pesquisa salarial", "Admissões", "Importar planilha"]) assert(!labels.includes(hidden), `${hidden} visível`);
+  assert(labels.includes("Vagas") && labels.includes("Aprovação do gestor") && labels.includes("Cargos e carreira"), labels.join(","));
   await p.goto(`${BASE}/configuracoes/usuarios`);
   assert(p.url().endsWith("/acesso-negado"), p.url());
   await p.goto(`${BASE}/remuneracao`);
   assert(p.url().endsWith("/acesso-negado"), p.url());
-  await p.goto(`${BASE}/vagas`);
+  await p.goto(`${BASE}/recrutamento/importar`);
+  assert(p.url().endsWith("/acesso-negado"), "gestor não importa planilha");
+  await p.goto(`${BASE}/colaboradores`);
   assert(await p.isVisible("text=Módulo em desenvolvimento"), "placeholder");
   await p.screenshot({ path: `${SHOTS}/05-modulo-futuro-gestor.png` });
   const me = await p.evaluate(() => fetch("/api/v1/me").then((r) => r.json()));
@@ -358,7 +365,7 @@ await step("Responsivo: menu lateral vira gaveta no celular", async () => {
   await p.click("button[aria-label='Abrir menu']");
   await p.waitForTimeout(300);
   await p.screenshot({ path: `${SHOTS}/07-mobile-menu.png` });
-  assert(await p.isVisible("aside >> text=Pesquisa salarial"), "menu aberto");
+  assert(await p.isVisible("aside >> text=Aprovação do gestor"), "menu aberto");
   await c.close();
 });
 

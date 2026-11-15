@@ -2,18 +2,20 @@
 
 /* Identidade visual Riale Hotéis — azul-marinho institucional + dourado de hospitalidade */
 @theme {
-  --color-riale-950: #071a2e;
-  --color-riale-900: #0c2743;
-  --color-riale-800: #133559;
-  --color-riale-700: #1c4775;
-  --color-riale-600: #285c93;
-  --color-riale-100: #e6edf5;
-  --color-riale-50: #f3f6fa;
-  --color-gold-600: #9a7744;
-  --color-gold-500: #b08d57;
-  --color-gold-400: #c9a96e;
-  --color-gold-100: #f4ecdf;
-  --color-sand-50: #f8f6f1;
+  /* Identidade Riale — tons de marrom (café, couro, caramelo) sobre fundo creme.
+     Os nomes "riale-*" (marrom) e "gold-*" (caramelo) são mantidos para não quebrar telas. */
+  --color-riale-950: #1c120c;
+  --color-riale-900: #2b1d14;
+  --color-riale-800: #3d2a1d;
+  --color-riale-700: #5b3f2c;
+  --color-riale-600: #7a5840;
+  --color-riale-100: #efe5da;
+  --color-riale-50: #f7f1ea;
+  --color-gold-600: #94653a;
+  --color-gold-500: #b07d4f;
+  --color-gold-400: #cfa47a;
+  --color-gold-100: #f3e6d6;
+  --color-sand-50: #faf6f0;
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
 }
@@ -21,39 +23,50 @@
 html,
 body {
   background: var(--color-sand-50);
-  color: #1f2937;
+  color: #2b2118;
   font-family: var(--font-sans);
 }
 
 @layer components {
 .input {
-  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-riale-600 focus:ring-2 focus:ring-riale-100 disabled:bg-slate-100;
+  @apply w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 shadow-sm outline-none transition focus:border-gold-500 focus:ring-2 focus:ring-gold-100 disabled:bg-stone-100;
 }
 .label {
-  @apply mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600;
+  @apply mb-1 block text-xs font-medium text-stone-600;
 }
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 bg-riale-900 text-white hover:bg-riale-800;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 bg-riale-900 text-white hover:bg-riale-800;
 }
 .btn-gold {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 bg-gold-500 text-white hover:bg-gold-600;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 bg-gold-500 text-white hover:bg-gold-600;
 }
 .btn-ghost {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 border border-stone-300 bg-white text-stone-700 hover:bg-riale-50;
 }
 .btn-sm {
   @apply px-2.5 py-1 text-xs;
 }
 .card {
-  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+  @apply rounded-xl border border-stone-200 bg-white shadow-[0_1px_2px_rgba(43,29,20,0.06)];
 }
 .table {
   @apply w-full text-left text-sm;
 }
 .table th {
-  @apply border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500;
+  @apply border-b border-stone-200 bg-riale-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-stone-500;
 }
 .table td {
-  @apply border-b border-slate-100 px-4 py-3 align-middle text-slate-700;
+  @apply border-b border-stone-100 px-4 py-3 align-middle text-stone-700;
 }
+}
+
+@layer components {
+  .table tbody tr:hover td { @apply bg-riale-50/60; }
+}
+
+@utility chip {
+  @apply inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-3 py-1 text-xs text-stone-600 hover:border-gold-400;
+}
+@utility chip-active {
+  @apply border-riale-800 bg-riale-800 text-white hover:border-riale-800;
 }

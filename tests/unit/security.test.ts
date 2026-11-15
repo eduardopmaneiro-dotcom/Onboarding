@@ -55,6 +55,8 @@ test("Auditoria nunca grava segredos", () => {
 test("Catálogo de permissões cobre o menu e o ADMIN mantém permissões críticas", () => {
   for (const n of NAVIGATION) assert.ok(n.permission in PERMISSION_CATALOG, n.permission);
   for (const code of ADMIN_LOCKED) assert.ok((PERMISSION_CATALOG[code].defaults as readonly string[]).includes("ADMIN"));
-  assert.equal(NAVIGATION.length, 11);
+  // Os 11 itens exigidos na Fase 1 continuam no menu (Fase 2 acrescentou Aprovação e Importação)
+  const required = ["Dashboard", "Vagas", "Candidatos", "Entrevistas", "Admissões", "Colaboradores", "Remuneração", "Pesquisa salarial", "Cargos e carreira", "Relatórios", "Configurações"];
+  for (const label of required) assert.ok(NAVIGATION.some((n) => n.label === label), label);
   assert.ok(!(PERMISSION_CATALOG["permissions.manage"].defaults as readonly string[]).includes("RH"));
 });

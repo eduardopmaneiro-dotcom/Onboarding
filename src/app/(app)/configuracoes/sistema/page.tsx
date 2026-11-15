@@ -15,7 +15,7 @@ export default async function SystemPage() {
       <PageHeader title="Sistema e LGPD" subtitle="Parâmetros gerais, retenção de dados e fila de comunicações." breadcrumb={{ href: "/configuracoes", label: "Configurações" }} />
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Parâmetros">
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-stone-100">
             {settings.map((s) => (
               <ActionForm key={s.key} action={saveSettingAction} className="py-3 first:pt-0">
                 <input type="hidden" name="key" value={s.key} />
@@ -24,16 +24,16 @@ export default async function SystemPage() {
                   <input id={s.key} name="value" defaultValue={String(s.value)} className="input" />
                   <Submit className="btn-ghost" pendingText="…">Salvar</Submit>
                 </div>
-                <p className="mt-1 font-mono text-[10px] text-slate-400">{s.key}{s.updatedBy && ` · alterado por ${s.updatedBy}`}</p>
+                <p className="mt-1 font-mono text-[10px] text-stone-400">{s.key}{s.updatedBy && ` · alterado por ${s.updatedBy}`}</p>
               </ActionForm>
             ))}
           </div>
         </Card>
         <div className="space-y-6">
           <Card title="Backups">
-            <ul className="space-y-2 text-sm text-slate-600">
-              <li>• Backup lógico do PostgreSQL: <code className="rounded bg-slate-100 px-1 text-xs">npm run db:backup</code> (pg_dump comprimido, rotação automática, cifra GPG opcional).</li>
-              <li>• Restauração: <code className="rounded bg-slate-100 px-1 text-xs">npm run db:restore -- &lt;arquivo&gt;</code>.</li>
+            <ul className="space-y-2 text-sm text-stone-600">
+              <li>• Backup lógico do PostgreSQL: <code className="rounded bg-stone-100 px-1 text-xs">npm run db:backup</code> (pg_dump comprimido, rotação automática, cifra GPG opcional).</li>
+              <li>• Restauração: <code className="rounded bg-stone-100 px-1 text-xs">npm run db:restore -- &lt;arquivo&gt;</code>.</li>
               <li>• Documentos: gravados cifrados (AES-256-GCM) no próprio banco — entram no mesmo backup. Em produção (Neon), há também restauração para um ponto no tempo.</li>
               <li>• Recomendação para produção: agendar diariamente (cron) e copiar para armazenamento externo com retenção de 30 dias.</li>
             </ul>
@@ -58,7 +58,7 @@ export default async function SystemPage() {
                 </table>
               </TableWrap>
             )}
-            <p className="mt-6 text-xs text-slate-400">O envio por SMTP entra na fase de comunicações automáticas; até lá as mensagens ficam enfileiradas.</p>
+            <p className="mt-6 text-xs text-stone-400">O envio por SMTP entra na fase de comunicações automáticas; até lá as mensagens ficam enfileiradas.</p>
           </Card>
         </div>
       </div>

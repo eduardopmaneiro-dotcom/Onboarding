@@ -72,7 +72,7 @@ export function Field({ name, label, hint, className = "", ...input }: FieldProp
         {label}
       </label>
       <input id={name} name={name} className="input" {...input} />
-      {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-stone-400">{hint}</p>}
       <FieldError name={name} />
     </div>
   );
@@ -111,9 +111,9 @@ export function TextAreaField({ name, label, className = "", ...rest }: FieldPro
 
 export function CheckboxField({ name, label, defaultChecked }: { name: string; label: string; defaultChecked?: boolean }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-slate-700">
+    <label className="flex items-center gap-2 text-sm text-stone-700">
       <input type="hidden" name={name} value="false" />
-      <input type="checkbox" name={name} value="true" defaultChecked={defaultChecked} className="h-4 w-4 rounded border-slate-300 accent-riale-900" />
+      <input type="checkbox" name={name} value="true" defaultChecked={defaultChecked} className="h-4 w-4 rounded border-stone-300 accent-riale-900" />
       {label}
     </label>
   );
@@ -136,7 +136,7 @@ export function CpfField({ label = "CPF", hint, required = true }: { label?: str
         {label}
       </label>
       <CpfInput required={required} />
-      {hint && <p className="mt-1 text-[11px] text-slate-400">{hint}</p>}
+      {hint && <p className="mt-1 text-[11px] text-stone-400">{hint}</p>}
       <FieldError name="cpf" />
     </div>
   );

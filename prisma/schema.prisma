@@ -49,13 +49,19 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  manager             Manager?
-  passwordResetTokens PasswordResetToken[]
-  auditLogs           AuditLog[]           @relation("ActorUser")
-  notifications       Notification[]
-  documentsUploaded   Document[]
-  settingsUpdated     Setting[]
-  movementsRecorded   MovementHistory[]
+  manager                 Manager?
+  passwordResetTokens     PasswordResetToken[]
+  auditLogs               AuditLog[]           @relation("ActorUser")
+  notifications           Notification[]
+  documentsUploaded       Document[]
+  settingsUpdated         Setting[]
+  movementsRecorded       MovementHistory[]
+  interviewsAsInterviewer Interview[]          @relation("InterviewInterviewer")
+  interviewResults        Interview[]          @relation("InterviewResultBy")
+  reviewsRequested        ManagerReview[]      @relation("ReviewRequestedBy")
+  reviewsDecided          ManagerReview[]      @relation("ReviewDecidedBy")
+  candidateEvents         CandidateEvent[]     @relation("CandidateEventActor")
+  importBatches           ImportBatch[]        @relation("ImportCreatedBy")
 
   @@index([role])
   @@index([unitId])
@@ -150,24 +156,29 @@ model CareerTrack {
 model Position {
   // Cargo: catálogo corporativo único (comparável entre unidades — base para remuneração e carreira).
   // Onde a pessoa trabalha é dado pelo Departamento (que pertence a uma Unidade).
-  id                  String               @id @default(cuid())
-  title               String
-  code                String?              @unique // CBO ou código interno
-  level               CareerLevel
-  description         String?              @db.Text
-  careerTrackId       String?
-  careerTrack         CareerTrack?         @relation(fields: [careerTrackId], references: [id])
-  isLeadership        Boolean              @default(false)
-  active              Boolean              @default(true)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  employees           Employee[]
-  jobOpenings         JobOpening[]
-  onboardingTemplates OnboardingTemplate[]
-  pdlCandidacies      PDLCandidacy[]
-  movementsFrom       MovementHistory[]    @relation("MovementFrom")
-  movementsTo         MovementHistory[]    @relation("MovementTo")
-  managers            Manager[]
+  id                    String               @id @default(cuid())
+  title                 String
+  code                  String?              @unique // CBO ou código interno
+  level                 CareerLevel
+  description           String?              @db.Text
+  careerTrackId         String?
+  careerTrack           CareerTrack?         @relation(fields: [careerTrackId], references: [id])
+  isLeadership          Boolean              @default(false)
+  /// Área padrão do cargo (nome do departamento) — usada para sugerir o departamento na vaga
+  defaultDepartmentName String?
+  /// Outras grafias do cargo (aprendidas na importação: "Ass. Governança", "garçom"…)
+  aliases               String[]             @default([])
+  active                Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  employees             Employee[]
+  desiredByCandidates   Candidate[]          @relation("CandidateDesiredPosition")
+  jobOpenings           JobOpening[]
+  onboardingTemplates   OnboardingTemplate[]
+  pdlCandidacies        PDLCandidacy[]
+  movementsFrom         MovementHistory[]    @relation("MovementFrom")
+  movementsTo           MovementHistory[]    @relation("MovementTo")
+  managers              Manager[]
 
   @@unique([title])
 }
@@ -228,11 +239,11 @@ model Manager {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  employees           Employee[]
-  jobOpenings         JobOpening[]
-  interviewsConducted Interview[]
-  movementsFrom       MovementHistory[] @relation("MovementFromManager")
-  movementsTo         MovementHistory[] @relation("MovementToManager")
+  employees      Employee[]
+  jobOpenings    JobOpening[]
+  managerReviews ManagerReview[]
+  movementsFrom  MovementHistory[] @relation("MovementFromManager")
+  movementsTo    MovementHistory[] @relation("MovementToManager")
 
   @@index([departmentId])
 }
@@ -343,7 +354,7 @@ model MovementHistory {
   @@index([employeeId, effectiveDate])
 }
 
-// ───────────────────────── RECRUTAMENTO (estrutura para a Fase 2) ─────────────────────────
+// ───────────────────────── RECRUTAMENTO E SELEÇÃO (Fase 2) ─────────────────────────
 
 enum JobOpeningStatus {
   RASCUNHO
@@ -352,6 +363,7 @@ enum JobOpeningStatus {
   PAUSADA
   PREENCHIDA
   CANCELADA
+  ENCERRADA // vagas históricas (importação) ou encerradas sem preenchimento
 }
 
 enum JobOpeningReason {
@@ -360,24 +372,49 @@ enum JobOpeningReason {
   TEMPORARIA
 }
 
+/// Escala de trabalho (hotelaria)
+enum WorkSchedule {
+  SEIS_POR_UM
+  CINCO_POR_DOIS
+  DOZE_POR_TRINTA_E_SEIS
+  OUTRA
+}
+
+/// Turno (RH-ONB-03: Diurno · Noturno · 12x36 · Administrativo)
+enum WorkShift {
+  DIURNO
+  NOTURNO
+  MISTO
+  ADMINISTRATIVO
+}
+
 model JobOpening {
   id                  String           @id @default(cuid())
-  code                String           @unique // ex.: VAG-2026-0001
+  code                String           @unique // VAG-2026-0001 (sequência no banco)
   positionId          String
   position            Position         @relation(fields: [positionId], references: [id])
-  departmentId        String
+  departmentId        String // departamento → unidade
   department          Department       @relation(fields: [departmentId], references: [id])
+  /// Gestor responsável — vem da estrutura organizacional
   requestingManagerId String?
   requestingManager   Manager?         @relation(fields: [requestingManagerId], references: [id])
-  reason              JobOpeningReason
+  reason              JobOpeningReason @default(SUBSTITUICAO)
   headcount           Int              @default(1)
-  status              JobOpeningStatus @default(RASCUNHO)
+  status              JobOpeningStatus @default(ABERTA)
   contractType        ContractType     @default(CLT)
+  expectedSalary      Decimal?         @db.Decimal(10, 2) // salário previsto
+  schedule            WorkSchedule?
+  shift               WorkShift?
+  weeklyHours         Int? // jornada semanal (ex.: 44)
+  workHours           String? // horário (ex.: 07:00–15:20)
   description         String?          @db.Text
   requirements        String?          @db.Text
   openedAt            DateTime?
   closedAt            DateTime?
   targetDate          DateTime?
+  isHistorical        Boolean          @default(false) // criada pela importação da planilha
+  importBatchId       String?
+  createdById         String?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
@@ -385,6 +422,7 @@ model JobOpening {
 
   @@index([status])
   @@index([positionId])
+  @@index([departmentId])
 }
 
 enum CandidateSource {
@@ -394,55 +432,91 @@ enum CandidateSource {
   INDEED
   AGENCIA
   BANCO_TALENTOS
+  INSTAGRAM
+  WHATSAPP
+  SINE
+  PRESENCIAL
+  EX_COLABORADOR
   OUTRO
 }
 
-/// Candidato — dados pessoais mínimos; consentimento LGPD e prazo de retenção obrigatórios.
+/// Candidato — cadastro mínimo (LGPD: sem CPF/endereço nesta etapa).
+/// nameNormalized/phoneNormalized servem à verificação de duplicidade.
 model Candidate {
-  id              String          @id @default(cuid())
-  fullName        String
-  email           String?
-  phone           String?
-  cpfHash         String?         @unique
-  cpfEnc          String?
-  source          CandidateSource @default(OUTRO)
-  consentAt       DateTime? // aceite do aviso de privacidade
-  consentVersion  String?
-  retainUntil     DateTime? // após esta data: anonimização
-  anonymizedAt    DateTime?
-  hiredEmployeeId String?         @unique
-  hiredEmployee   Employee?       @relation(fields: [hiredEmployeeId], references: [id])
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  id                String          @id @default(cuid())
+  fullName          String
+  nameNormalized    String          @default("")
+  email             String?
+  phone             String?
+  phoneNormalized   String?
+  desiredPositionId String? // cargo pretendido (preenchido pela vaga quando houver)
+  desiredPosition   Position?       @relation("CandidateDesiredPosition", fields: [desiredPositionId], references: [id])
+  notes             String?         @db.Text
+  cpfHash           String?         @unique
+  cpfEnc            String?
+  source            CandidateSource @default(OUTRO)
+  consentAt         DateTime? // aceite do aviso de privacidade
+  consentVersion    String?
+  retainUntil       DateTime? // após esta data: anonimização
+  anonymizedAt      DateTime?
+  hiredEmployeeId   String?         @unique
+  hiredEmployee     Employee?       @relation(fields: [hiredEmployeeId], references: [id])
+  importBatchId     String?
+  createdById       String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   applications Application[]
+  events       CandidateEvent[]
 
   @@index([email])
+  @@index([nameNormalized])
+  @@index([phoneNormalized])
 }
 
 enum ApplicationStatus {
   TRIAGEM
   ENTREVISTA
-  AVALIACAO
+  AVALIACAO // aguardando avaliação externa (ex.: AGINCO / sindicância)
+  AGUARDANDO_GESTOR
   PROPOSTA
   APROVADO
   REPROVADO
   DESISTENTE
+  NAO_COMPARECEU
+  BANCO_TALENTOS
   CONTRATADO
 }
 
-/// Candidatura: liga candidato à vaga (um candidato pode concorrer a várias vagas)
-model Application {
-  id           String            @id @default(cuid())
-  candidateId  String
-  candidate    Candidate         @relation(fields: [candidateId], references: [id])
-  jobOpeningId String
-  jobOpening   JobOpening        @relation(fields: [jobOpeningId], references: [id])
-  status       ApplicationStatus @default(TRIAGEM)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+/// Avaliação externa entre RH e gestor (na planilha atual: AGINCO / sindicância)
+enum ExternalCheckStatus {
+  NAO_APLICA
+  AGUARDANDO
+  APROVADO
+  REPROVADO
+}
 
-  interviews Interview[]
+/// Candidatura: candidato × vaga. Guarda a negociação salarial (base da inteligência de mercado).
+model Application {
+  id                  String              @id @default(cuid())
+  candidateId         String
+  candidate           Candidate           @relation(fields: [candidateId], references: [id])
+  jobOpeningId        String
+  jobOpening          JobOpening          @relation(fields: [jobOpeningId], references: [id])
+  status              ApplicationStatus   @default(TRIAGEM)
+  offeredSalary       Decimal?            @db.Decimal(10, 2)
+  expectedSalary      Decimal?            @db.Decimal(10, 2) // pretensão
+  lastSalary          Decimal?            @db.Decimal(10, 2)
+  valuedBenefits      String[]            @default([])
+  externalCheckStatus ExternalCheckStatus @default(NAO_APLICA)
+  externalCheckNote   String?
+  notes               String?             @db.Text
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  interviews     Interview[]
+  managerReviews ManagerReview[]
+  events         CandidateEvent[]
 
   @@unique([candidateId, jobOpeningId])
   @@index([jobOpeningId, status])
@@ -462,24 +536,182 @@ enum InterviewStatus {
   NAO_COMPARECEU
 }
 
+/// Resultado do RH na entrevista (separado da decisão do gestor — ManagerReview)
+enum InterviewResult {
+  PENDENTE
+  APROVADO
+  REPROVADO
+  NAO_COMPARECEU
+  DESISTIU
+}
+
+/// Motivos padronizados (editáveis em Configurações); `code` estável para análises.
+model RejectionReason {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  label        String
+  requiresNote Boolean  @default(false) // "Outro" exige observação
+  active       Boolean  @default(true)
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  interviews Interview[]
+  reviews    ManagerReview[]
+}
+
 model Interview {
-  id            String          @id @default(cuid())
-  applicationId String
-  application   Application     @relation(fields: [applicationId], references: [id])
-  type          InterviewType
-  scheduledAt   DateTime
-  durationMin   Int             @default(45)
-  location      String?
-  interviewerId String?
-  interviewer   Manager?        @relation(fields: [interviewerId], references: [id])
-  status        InterviewStatus @default(AGENDADA)
-  score         Float?
-  notes         String?         @db.Text
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  id                String           @id @default(cuid())
+  applicationId     String
+  application       Application      @relation(fields: [applicationId], references: [id])
+  type              InterviewType    @default(TRIAGEM_RH)
+  stage             Int              @default(1) // 1ª, 2ª etapa…
+  scheduledAt       DateTime
+  hasTime           Boolean          @default(true) // falso em registros importados só com data
+  durationMin       Int              @default(30)
+  location          String?
+  interviewerUserId String?
+  interviewerUser   User?            @relation("InterviewInterviewer", fields: [interviewerUserId], references: [id])
+  interviewerName   String? // nome exibido (ex.: "Sara / Aline" vindo da planilha)
+  status            InterviewStatus  @default(AGENDADA)
+  result            InterviewResult  @default(PENDENTE)
+  reasonId          String?
+  reason            RejectionReason? @relation(fields: [reasonId], references: [id])
+  resultNote        String?          @db.Text
+  resultAt          DateTime?
+  resultById        String?
+  resultBy          User?            @relation("InterviewResultBy", fields: [resultById], references: [id])
+  score             Float?
+  notes             String?          @db.Text
+  createdById       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   @@index([applicationId])
   @@index([scheduledAt])
+  @@index([result])
+}
+
+enum ManagerDecision {
+  PENDENTE
+  APROVADO
+  REPROVADO
+  NOVA_ENTREVISTA
+}
+
+/// Avaliação do gestor — criada automaticamente quando o RH aprova. Separada do resultado do RH.
+model ManagerReview {
+  id            String           @id @default(cuid())
+  applicationId String
+  application   Application      @relation(fields: [applicationId], references: [id])
+  managerId     String?
+  manager       Manager?         @relation(fields: [managerId], references: [id])
+  status        ManagerDecision  @default(PENDENTE)
+  reasonId      String?
+  reason        RejectionReason? @relation(fields: [reasonId], references: [id])
+  justification String?          @db.Text
+  onBehalf      Boolean          @default(false) // registrado pelo RH em nome do gestor
+  requestedById String?
+  requestedBy   User?            @relation("ReviewRequestedBy", fields: [requestedById], references: [id])
+  decidedById   String?
+  decidedBy     User?            @relation("ReviewDecidedBy", fields: [decidedById], references: [id])
+  requestedAt   DateTime         @default(now())
+  decidedAt     DateTime?
+
+  @@index([managerId, status])
+  @@index([applicationId])
+}
+
+enum CandidateEventType {
+  CADASTRO
+  EDICAO
+  CANDIDATURA
+  ENTREVISTA_AGENDADA
+  ENTREVISTA_REMARCADA
+  ENTREVISTA_CANCELADA
+  RESULTADO_RH
+  AVALIACAO_EXTERNA
+  ENCAMINHADO_GESTOR
+  DECISAO_GESTOR
+  STATUS
+  SALARIO
+  IMPORTACAO
+  OBSERVACAO
+}
+
+/// Histórico do candidato — somente inserção (trigger no banco).
+model CandidateEvent {
+  id            String             @id @default(cuid())
+  candidateId   String
+  candidate     Candidate          @relation(fields: [candidateId], references: [id])
+  applicationId String?
+  application   Application?       @relation(fields: [applicationId], references: [id])
+  interviewId   String?
+  type          CandidateEventType
+  summary       String
+  details       Json?
+  actorUserId   String?
+  actorUser     User?              @relation("CandidateEventActor", fields: [actorUserId], references: [id])
+  actorName     String? // quem decidiu (texto, para registros importados)
+  occurredAt    DateTime           @default(now())
+  createdAt     DateTime           @default(now())
+
+  @@index([candidateId, occurredAt])
+}
+
+// ───────────────────────── IMPORTAÇÃO DA PLANILHA ─────────────────────────
+
+enum ImportBatchStatus {
+  CARREGADO
+  ANALISADO
+  IMPORTADO
+  CANCELADO
+}
+
+enum ImportRowStatus {
+  OK
+  ALERTA // importável, com observação (ex.: sem telefone)
+  DUPLICADO_ARQUIVO
+  JA_EXISTE
+  INCONSISTENTE
+  IMPORTADO
+  IGNORADO
+}
+
+model ImportBatch {
+  id           String            @id @default(cuid())
+  fileName     String
+  sha256       String
+  sheetName    String?
+  status       ImportBatchStatus @default(CARREGADO)
+  headers      Json // cabeçalhos da planilha
+  columnMap    Json? // coluna da planilha → campo
+  valueMap     Json? // valor da planilha → cadastro (unidade, cargo, resultado, motivo…)
+  summary      Json?
+  totalRows    Int               @default(0)
+  importedRows Int               @default(0)
+  ignoredRows  Int               @default(0)
+  createdById  String
+  createdBy    User              @relation("ImportCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime          @default(now())
+  committedAt  DateTime?
+
+  rows ImportRow[]
+}
+
+model ImportRow {
+  id           String          @id @default(cuid())
+  batchId      String
+  batch        ImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber    Int // linha na planilha original
+  raw          Json
+  normalized   Json?
+  status       ImportRowStatus @default(OK)
+  issues       String[]        @default([])
+  decision     String? // IMPORTAR | IGNORAR | VINCULAR
+  ignoreReason String?
+  candidateId  String?
+
+  @@index([batchId, status])
 }
 
 // ───────────────────────── NOTIFICAÇÕES / CONFIGURAÇÕES / DOCUMENTOS ─────────────────────────

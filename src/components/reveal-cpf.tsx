@@ -7,10 +7,10 @@ export function RevealCpf({ masked, reveal }: { masked: string; reveal: () => Pr
   const [value, setValue] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
-  if (value) return <span className="font-mono text-xs text-slate-900">{value}</span>;
+  if (value) return <span className="font-mono text-xs text-stone-900">{value}</span>;
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="font-mono text-xs text-slate-500">{masked}</span>
+      <span className="font-mono text-xs text-stone-500">{masked}</span>
       <button
         type="button"
         disabled={pending}

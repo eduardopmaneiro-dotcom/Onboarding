@@ -23,7 +23,7 @@ export default async function FirstAccessPage() {
   if (!open) {
     return (
       <AuthShell title="Primeiro acesso" subtitle="A configuração inicial já foi concluída ou não está habilitada.">
-        <p className="text-sm text-slate-600">Novos acessos são cadastrados por um administrador ou pelo RH, dentro da plataforma.</p>
+        <p className="text-sm text-stone-600">Novos acessos são cadastrados por um administrador ou pelo RH, dentro da plataforma.</p>
         <Link href="/login" className="btn-primary mt-6">Ir para o login</Link>
       </AuthShell>
     );

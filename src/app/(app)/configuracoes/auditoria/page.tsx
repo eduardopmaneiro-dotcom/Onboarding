@@ -43,14 +43,14 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
                   <tr key={r.id}>
                     <td className="whitespace-nowrap text-xs">{r.createdAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</td>
                     <td><Badge tone={SENSITIVE.has(r.action) ? "red" : "blue"}>{r.action}</Badge></td>
-                    <td className="text-xs"><Link href={qs({ entidade: r.entityType, p: undefined })} className="hover:underline">{r.entityType}</Link><p className="font-mono text-[10px] text-slate-400">{r.entityId}</p></td>
-                    <td className="text-xs">{r.actor?.name ?? "—"}{r.actorRole && <p className="text-[10px] text-slate-400">{r.actorRole}</p>}</td>
-                    <td className="font-mono text-[10px] text-slate-500">{r.ip ?? "—"}</td>
+                    <td className="text-xs"><Link href={qs({ entidade: r.entityType, p: undefined })} className="hover:underline">{r.entityType}</Link><p className="font-mono text-[10px] text-stone-400">{r.entityId}</p></td>
+                    <td className="text-xs">{r.actor?.name ?? "—"}{r.actorRole && <p className="text-[10px] text-stone-400">{r.actorRole}</p>}</td>
+                    <td className="font-mono text-[10px] text-stone-500">{r.ip ?? "—"}</td>
                     <td className="max-w-xs">
                       {(r.newValue || r.previousValue || r.justification) && (
                         <details className="text-xs">
                           <summary className="cursor-pointer text-gold-600">ver</summary>
-                          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-slate-50 p-2 text-[10px]">{JSON.stringify({ antes: r.previousValue, depois: r.newValue, justificativa: r.justification }, null, 1)}</pre>
+                          <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-stone-50 p-2 text-[10px]">{JSON.stringify({ antes: r.previousValue, depois: r.newValue, justificativa: r.justification }, null, 1)}</pre>
                         </details>
                       )}
                     </td>
@@ -60,7 +60,7 @@ export default async function AuditPage({ searchParams }: { searchParams: Promis
             </table>
           </TableWrap>
         )}
-        <div className="mt-8 flex items-center justify-between text-xs text-slate-500">
+        <div className="mt-8 flex items-center justify-between text-xs text-stone-500">
           <span>Página {page} de {pages}</span>
           <div className="flex gap-2">
             {page > 1 && <Link className="btn-ghost btn-sm" href={qs({ p: String(page - 1) })}>Anterior</Link>}

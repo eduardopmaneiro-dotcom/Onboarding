@@ -20,7 +20,8 @@
     "postinstall": "prisma generate",
     "db:seed:demo": "SEED_DEMO=true tsx prisma/seed.ts",
     "vercel-build": "tsx scripts/check-env.ts && prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build",
-    "test:e2e:first-access": "node tests/e2e/first-access.cjs"
+    "test:e2e:first-access": "node tests/e2e/first-access.cjs",
+    "test:e2e:recrutamento": "node tests/e2e/recruitment.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -30,8 +31,10 @@
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
+    "exceljs": "^4.4.0",
     "next": "16.2.9",
     "next-auth": "^5.0.0-beta.31",
+    "papaparse": "^5.5.3",
     "prisma": "^5.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -42,6 +45,7 @@
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
