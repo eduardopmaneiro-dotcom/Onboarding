@@ -282,7 +282,7 @@ await step("API v1: RH corporativo lista e cria via JSON, com validação", asyn
   await c.close();
 });
 
-await step("Documentos: upload cifrado em disco e download íntegro com auditoria", async () => {
+await step("Documentos: upload cifrado no banco e download íntegro com auditoria", async () => {
   const c = await ctx();
   const p = await c.newPage();
   await login(p, USERS.rh);
@@ -303,9 +303,8 @@ await step("Documentos: upload cifrado em disco e download íntegro com auditori
   });
   assert(res.down.startsWith("%PDF-1.4"), "conteúdo");
   assert(res.blocked === 422, `arquivo falso aceito: ${res.blocked}`);
-  const key = psql(`SELECT "storageKey" FROM "Document" WHERE id='${res.id}'`);
-  const onDisk = execFileSync("head", ["-c", "64", `${process.env.DOCUMENTS_DIR ?? "storage/documents"}/${key}`]).toString("latin1");
-  assert(!onDisk.includes("%PDF"), "arquivo em claro no disco!");
+  const stored = psql(`SELECT encode(data, 'escape') FROM "DocumentBlob" WHERE "documentId"='${res.id}'`);
+  assert(stored.length > 0 && !stored.includes("%PDF"), "documento gravado em claro no banco!");
   assert(psql(`SELECT count(*) FROM "AuditLog" WHERE "entityId"='${res.id}' AND action='DOCUMENT_DOWNLOAD'`) === "1", "auditoria do download");
   await c.close();
 });

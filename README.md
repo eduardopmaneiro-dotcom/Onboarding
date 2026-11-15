@@ -14,6 +14,7 @@ indicadores e carreira.
 
 | Documento | Conteúdo |
 |---|---|
+| [`docs/DEPLOY-VERCEL.md`](docs/DEPLOY-VERCEL.md) | **Publicação em produção (Vercel + Neon) e primeiro acesso** |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas, modelo de dados, segurança/LGPD, roadmap e riscos |
 | Este README | Instalação, execução, usuários de teste, testes, backup e deploy |
 
@@ -57,15 +58,21 @@ Rode o comando acima três vezes e cole cada resultado em `AUTH_SECRET`,
 > **Se forem perdidas, os dados cifrados ficam ilegíveis.** Em produção, guarde-as em
 > um cofre (AWS Secrets Manager, 1Password, Vault), separadas dos backups do banco.
 
-Crie as tabelas e carregue os dados iniciais:
+Crie as tabelas e carregue os dados iniciais. Para desenvolvimento, use a versão com
+usuários de demonstração:
 
 ```bash
 npx prisma migrate deploy
 ```
 
 ```bash
-npm run db:seed
+npm run db:seed:demo
 ```
+
+`npm run db:seed` carrega **só a estrutura** (unidades, departamentos, cargos, trilhas e
+permissões), sem nenhum usuário: é o que roda em produção. Nesse caso o primeiro
+administrador é criado na tela **`/primeiro-acesso`**, que exige `BOOTSTRAP_ADMIN_CPF` e
+`BOOTSTRAP_TOKEN` no `.env`.
 
 ## 3. Execução
 
@@ -83,7 +90,7 @@ npm run build && npm start
 
 Acesse **http://localhost:3000**.
 
-### Usuários de teste (criados pelo seed)
+### Usuários de teste (somente com `npm run db:seed:demo`)
 
 Senha de todos: **`Riale@2026Seguro`**
 
@@ -94,9 +101,8 @@ Senha de todos: **`Riale@2026Seguro`**
 | RH (unidade) | Paulo Henrique Lima | `390.533.447-05` | Apenas Brisa Barra |
 | Gestor | Marina Souza | `168.995.350-09` | Leitura; vinculada ao cadastro de gestora da Recepção (Brisa Barra) |
 
-> Estes CPFs são fictícios (apenas válidos matematicamente). **Antes de qualquer uso real,
-> desative ou exclua esses usuários e cadastre os reais**: os usuários criados pela interface
-> são obrigados a trocar a senha no primeiro acesso.
+> Estes CPFs são fictícios (apenas válidos matematicamente) e **nunca são criados em
+> produção**: o seed recusa `SEED_DEMO` no ambiente de produção da Vercel.
 
 ## 4. Testes
 
@@ -107,13 +113,15 @@ Senha de todos: **`Riale@2026Seguro`**
 | `npm test` | Unitários: CPF, criptografia, política de senha, mascaramento da auditoria, catálogo de permissões |
 | `npm run test:integration` | Serviços contra o PostgreSQL real: escopo por unidade, anti-escalonamento de perfil, hierarquia sem ciclos, CPF protegido, imutabilidade da auditoria, integridade referencial |
 | `npm run test:e2e` | Navegador real (Playwright) contra o servidor rodando: login, perfis, cadastros, validação, LGPD, documentos, recuperação de senha, bloqueio, responsividade |
+| `npm run test:e2e:first-access` | Banco de produção vazio: primeiro acesso (CPF + código), cadastro dos demais usuários, troca obrigatória de senha |
 
 O E2E exige o servidor no ar (`npm start`) e o Playwright instalado
 (`npm i -D playwright && npx playwright install chromium`). Capturas de tela ficam em
 `tests/e2e/screenshots/`.
 
-**Resultado na entrega:** 7/7 unitários, 10/10 de integração e 15/15 cenários E2E,
-executados após `prisma migrate reset` (instalação do zero).
+**Resultado na entrega:** 7/7 unitários, 10/10 de integração, 15/15 cenários E2E e 12/12 do
+primeiro acesso. Este último rodou sobre um banco vazio, com o mesmo `vercel-build` usado na
+Vercel.
 
 ## 5. Backup e restauração
 
@@ -137,18 +145,12 @@ restaurado reproduziu contagens e travas idênticas às do original.
 armazenamento externo (S3 com versionamento ou outra nuvem). Um backup que nunca foi
 restaurado não é backup: faça um teste de restauração por trimestre.
 
-## 6. Deploy (resumo)
+## 6. Deploy em produção
 
-1. Banco PostgreSQL gerenciado (RDS, Cloud SQL, Neon, Supabase) com backup automático e
-   *point-in-time recovery*.
-2. Variáveis de ambiente de produção num cofre de segredos; `APP_URL` com HTTPS.
-3. No pipeline: `npm ci && npx prisma migrate deploy && npm run build && npm start`.
-4. HTTPS obrigatório. Os cabeçalhos de segurança (CSP, HSTS, X-Frame-Options) já vêm
-   configurados em `next.config.ts`.
-5. Monitoramento: `GET /api/v1/health` (público, sem dados).
-6. Antes de abrir para o RH: trocar os usuários de teste, configurar o envio de e-mails
-   (fase de comunicações) e definir o e-mail do encarregado (DPO) em
-   *Configurações › Sistema e LGPD*.
+Siga o guia **[`docs/DEPLOY-VERCEL.md`](docs/DEPLOY-VERCEL.md)**: Vercel (região São Paulo) +
+Neon (São Paulo), sem usuários de teste e com primeiro acesso protegido por CPF + código. O
+build (`npm run vercel-build`) valida as variáveis, aplica as migrações, carrega a estrutura
+e compila.
 
 ## 7. Estrutura de pastas
 

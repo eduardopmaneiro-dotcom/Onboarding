@@ -30,7 +30,7 @@ Navegador ──HTTPS──▶ Next.js (App Router, Node)
                        ├─ lib/ (auth, sessão, cripto, CPF, auditoria, permissões)
                        │        ▼
                        └─ Prisma ──▶ PostgreSQL (FKs, CHECKs, triggers de imutabilidade)
-                                    storage/documents (arquivos cifrados AES-256-GCM)
+                                    (documentos cifrados AES-256-GCM em DocumentBlob)
 ```
 
 **Princípio central:** a interface e a API chamam a **mesma camada de serviço**. Validação,
@@ -142,7 +142,7 @@ testes verificam que não há órfãos e que a exclusão de registros referencia
 | **Acesso restrito ao CPF** | Revelar o CPF exige a permissão `pii.reveal` e gera um evento `PII_ACCESS` na auditoria (quem, quando, IP) |
 | **Controle de acesso** | Matriz de permissões + escopo por unidade + regras anti-escalonamento, aplicados no serviço (vale para tela e API). Tentativas negadas são auditadas (`ACCESS_DENIED`) |
 | **Auditoria** | Toda criação, alteração, login (com sucesso ou não), logout, troca ou redefinição de senha, mudança de permissão, upload, download e acesso a dado pessoal é registrada com valor anterior e novo, autor, perfil, IP e user-agent. Senhas, hashes e CPF são mascarados automaticamente. O banco impede alterar ou excluir registros. O RH não vê ações de administradores (segregação de funções) |
-| **Documentos** | Gravados fora da pasta pública e cifrados (AES-256-GCM) com nome aleatório. O tipo é conferido pela assinatura binária, não pela extensão; formatos fechados (PDF/JPG/PNG/DOCX) e tamanho máximo configurável. Download só pela API, com permissão, conferência de integridade (SHA-256), auditoria e `Cache-Control: no-store` |
+| **Documentos** | Cifrados (AES-256-GCM) e gravados no banco (`DocumentBlob`), pois o disco de ambientes serverless é temporário; com isso entram no backup do banco. O tipo é conferido pela assinatura binária, não pela extensão; formatos fechados (PDF/JPG/PNG/DOCX) e tamanho máximo configurável. Download só pela API, com permissão, conferência de integridade (SHA-256), auditoria e `Cache-Control: no-store` |
 | **Validação de dados** | Esquemas zod em todos os serviços, CPF com dígito verificador, e-mail, formatos e tamanhos. Erros por campo na interface e `422` na API. Unicidade e chaves estrangeiras garantidas no banco |
 | **Backups** | Dump diário + documentos + checksums + retenção + GPG opcional. Restauração testada |
 | **Transporte e navegador** | HSTS, CSP restritiva, `frame-ancestors 'none'`, `nosniff`, sem o cabeçalho `X-Powered-By`, `robots: noindex` |
@@ -182,17 +182,29 @@ e responde em JSON (`{ data }` ou `{ error, fieldErrors }`).
 **Próximo passo para integrações externas** (folha, Sólides, BI): criar tokens de serviço
 com escopo e prazo, ligados a um "usuário técnico". A camada de serviço não muda.
 
-## 7. Limitações conhecidas desta fase
+## 7. Produção e primeiro acesso
+
+- **Hospedagem:** Vercel (região `gru1`, São Paulo) + Neon PostgreSQL (`aws-sa-east-1`).
+  Os dados ficam no Brasil. Guia em `docs/DEPLOY-VERCEL.md`.
+- **Sem usuários pré-criados em produção.** O primeiro administrador é criado em
+  `/primeiro-acesso`, que exige **duas provas**: o CPF autorizado (`BOOTSTRAP_ADMIN_CPF`) e
+  um código secreto (`BOOTSTRAP_TOKEN`, mín. 16 caracteres). O CPF sozinho não basta, porque
+  é um dado semipúblico. A criação usa *advisory lock* (impede duas criações simultâneas) e
+  a tela fecha permanentemente assim que existe um usuário. Tentativas inválidas são auditadas.
+- **Formulários:** após erro de validação, os valores digitados são mantidos. Antes de a
+  página carregar por completo, o envio também é feito por POST, nunca com dados na URL.
+
+## 8. Limitações conhecidas desta fase
 
 | Limitação | Impacto | Quando resolver |
 |---|---|---|
-| E-mails são enfileirados (`Notification`), mas **não enviados** | A recuperação de senha só funciona de ponta a ponta quando houver SMTP; até lá, o admin define uma senha temporária | Antes de liberar para os usuários. Um worker simples com SES ou Sendgrid resolve |
+| E-mails só são enviados com `RESEND_API_KEY` configurada | Sem ela, a recuperação de senha depende do administrador | Antes de liberar para os usuários (Passo 7 do guia de deploy) |
 | Bloqueio de login por conta, sem limite por IP | Um ataque distribuído contra muitos CPFs não é contido | Ao publicar na internet: WAF/rate limit no proxy (Cloudflare, ALB) |
 | Sem MFA | Contas ADMIN e RH dependem só da senha | Recomendo TOTP para ADMIN e RH na fase de Remuneração, quando houver salários na base |
 | Upload de documentos só pela API | Ainda não há tela de anexos | Entra em Admissões e Candidatos |
 | Gestor sem visão "minha equipe" | O perfil Gestor tem pouco uso real nesta fase | Entra com Colaboradores e Vagas |
 
-## 8. Roadmap sugerido
+## 9. Roadmap sugerido
 
 | Fase | Módulos | Depende de |
 |---|---|---|

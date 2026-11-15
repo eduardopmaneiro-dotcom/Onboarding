@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 function mask(v: string) {
   const d = v.replace(/\D/g, "").slice(0, 11);
   return d
@@ -10,8 +8,8 @@ function mask(v: string) {
     .replace(/\.(\d{3})(\d)/, ".$1-$2");
 }
 
+/** Campo de CPF com máscara. Não controlado: preserva o valor em erros e limpa com form.reset(). */
 export function CpfInput({ name = "cpf", id = "cpf", required = true, defaultValue = "" }: { name?: string; id?: string; required?: boolean; defaultValue?: string }) {
-  const [value, setValue] = useState(mask(defaultValue));
   return (
     <input
       id={id}
@@ -21,8 +19,11 @@ export function CpfInput({ name = "cpf", id = "cpf", required = true, defaultVal
       autoComplete="username"
       placeholder="000.000.000-00"
       className="input font-mono tracking-wide"
-      value={value}
-      onChange={(e) => setValue(mask(e.target.value))}
+      defaultValue={mask(defaultValue)}
+      onChange={(e) => {
+        const masked = mask(e.target.value);
+        if (masked !== e.target.value) e.target.value = masked;
+      }}
     />
   );
 }

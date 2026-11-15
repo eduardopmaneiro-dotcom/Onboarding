@@ -1,15 +1,20 @@
 /**
- * Seed da Fase 1 — idempotente (pode rodar várias vezes).
- * Carrega: catálogo de permissões, 3 unidades, departamentos, catálogo de cargos,
- * trilhas de carreira (RH-CAR-01), template de onboarding (RH-ONB-02),
- * gestores com hierarquia, usuários de teste e configurações padrão.
+ * Seed — idempotente (roda a cada deploy sem duplicar nem sobrescrever edições).
+ * Sempre carrega a ESTRUTURA: permissões, 3 unidades, departamentos, catálogo de cargos,
+ * trilhas de carreira (RH-CAR-01) e template de onboarding (RH-ONB-02).
+ * Com SEED_DEMO=true carrega também gestores e usuários FICTÍCIOS (apenas dev/testes).
+ * Em produção nenhum usuário é criado: o 1º administrador entra por /primeiro-acesso.
  */
-import { PrismaClient, CareerLevel, OnboardingPeriod, ChecklistItemType, StageOwner, type Role } from "@prisma/client";
+import { CareerLevel, OnboardingPeriod, ChecklistItemType, StageOwner, type Role } from "@prisma/client";
 import { PERMISSION_CATALOG } from "../src/lib/permissions";
+import { prisma } from "../src/lib/prisma";
 import { protectCpf, cpfHash } from "../src/lib/cpf";
 import { hashPassword } from "../src/lib/password";
 
-const prisma = new PrismaClient();
+try {
+  process.loadEnvFile?.(".env"); // ambiente local (crypto/Prisma leem o env sob demanda); na Vercel as variáveis já vêm do ambiente
+} catch {}
+
 
 /** Gera um CPF válido a partir de 9 dígitos base (apenas para dados de teste). */
 function testCpf(base9: string): string {
@@ -129,7 +134,10 @@ async function main() {
     });
   }
 
-  // ── Gestores (com superior direto) ──
+  const demo = process.env.SEED_DEMO === "true";
+  if (demo && process.env.VERCEL_ENV === "production") throw new Error("SEED_DEMO não é permitido em produção");
+
+  // ── Gestores (com superior direto) — somente demonstração ──
   const managersDef: Array<{ key: string; name: string; email: string; cpfBase?: string; internalId?: string; pos: string; unit: string; dept: string; superior?: string }> = [
     { key: "gg_brisa", name: "Ricardo Albuquerque", email: "ricardo.albuquerque@rialehoteis.com.br", internalId: "BR-0001", pos: "dir", unit: "BRISA", dept: "DIR" },
     { key: "marina", name: "Marina Souza", email: "marina.souza@rialehoteis.com.br", cpfBase: "168995350", internalId: "BR-0102", pos: "suprec", unit: "BRISA", dept: "REC", superior: "gg_brisa" },
@@ -140,7 +148,7 @@ async function main() {
     { key: "gg_vila", name: "Roberto Nogueira", email: "roberto.nogueira@rialehoteis.com.br", internalId: "VL-0001", pos: "dir", unit: "VILAMAR", dept: "DIR" },
   ];
   const mgr: Record<string, { id: string }> = {};
-  for (const m of managersDef) {
+  for (const m of demo ? managersDef : []) {
     mgr[m.key] = await prisma.manager.upsert({
       where: { email: m.email },
       update: {},
@@ -156,9 +164,9 @@ async function main() {
     });
   }
 
-  // ── Usuários de teste ──
+  // ── Usuários de teste — somente demonstração ──
   const passwordHash = await hashPassword(SEED_PASSWORD);
-  for (const u of TEST_USERS) {
+  for (const u of demo ? TEST_USERS : []) {
     const cpf = testCpf(u.cpfBase);
     const existing = await prisma.user.findUnique({ where: { cpfHash: cpfHash(cpf) } });
     const user =
@@ -208,7 +216,8 @@ async function main() {
     }
   }
 
-  console.log("Seed concluído.");
+  console.log(`Seed concluído (${demo ? "estrutura + demonstração" : "estrutura"}).`);
+  if (!demo) return;
   console.log(`Senha dos usuários de teste: ${SEED_PASSWORD}`);
   for (const u of TEST_USERS) console.log(`  ${u.role.padEnd(7)} CPF ${testCpf(u.cpfBase).replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")}  (${u.name})`);
 }

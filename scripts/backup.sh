@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Backup da Plataforma de RH Riale: banco (pg_dump, formato custom) + documentos cifrados.
+# Backup da Plataforma de RH Riale: banco (pg_dump, formato custom). Os documentos ficam
+# cifrados dentro do banco (DocumentBlob); a pasta legada storage/documents é incluída se existir.
+# Neon: use a conexão DIRETA (DATABASE_URL_UNPOOLED), não a do pooler.
 # Uso: npm run db:backup   (lê DATABASE_URL, BACKUP_DIR, BACKUP_RETENTION_DAYS, BACKUP_GPG_RECIPIENT do .env)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -10,7 +12,8 @@ BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETENTION="${BACKUP_RETENTION_DAYS:-30}"
 DOCS="${DOCUMENTS_DIR:-./storage/documents}"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-DB_URL="${DATABASE_URL%%\?*}"   # pg_dump não aceita ?schema=
+SRC_URL="${DATABASE_URL_UNPOOLED:-$DATABASE_URL}"
+DB_URL="${SRC_URL%%\?schema=*}"   # pg_dump não aceita ?schema= (mantém sslmode do Neon)
 
 umask 077
 mkdir -p "$BACKUP_DIR"

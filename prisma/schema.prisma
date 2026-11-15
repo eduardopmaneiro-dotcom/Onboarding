@@ -13,8 +13,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Neon: conexão com pool (-pooler)
+  directUrl = env("DATABASE_URL_UNPOOLED") // Neon: conexão direta (migrações)
 }
 
 // ───────────────────────── IDENTIDADE E ACESSO ─────────────────────────
@@ -545,14 +546,23 @@ model Document {
   mimeType       String
   sizeBytes      Int
   sha256         String
-  storageKey     String                 @unique
+  storageKey     String                 @unique // legado/identificador; conteúdo em DocumentBlob
   classification DocumentClassification @default(CONFIDENCIAL)
   uploadedById   String
   uploadedBy     User                   @relation(fields: [uploadedById], references: [id])
+  blob           DocumentBlob?
   deletedAt      DateTime?
   createdAt      DateTime               @default(now())
 
   @@index([ownerType, ownerId])
+}
+
+/// Conteúdo do documento, cifrado (AES-256-GCM: iv|tag|dados). Fica no banco porque o
+/// sistema de arquivos de ambientes serverless (Vercel) é efêmero; entra no backup do banco.
+model DocumentBlob {
+  documentId String   @id
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  data       Bytes
 }
 
 // ───────────────────────── AUDITORIA (somente inserção) ─────────────────────────

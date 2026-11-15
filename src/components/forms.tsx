@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useActionState, useContext, useEffect, useRef, type ReactNode } from "react";
+import { createContext, startTransition, useActionState, useContext, useEffect, useRef, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/modules/shared/action";
 import { CpfInput } from "@/components/cpf-input";
@@ -8,19 +8,39 @@ import { CpfInput } from "@/components/cpf-input";
 type Action = (prev: ActionState, fd: FormData) => Promise<ActionState>;
 
 const Ctx = createContext<ActionState>(null);
+const PendingCtx = createContext(false);
 
-/** Formulário ligado a uma server action, com mensagens e erros por campo. */
+/**
+ * Formulário ligado a uma server action, com mensagens e erros por campo.
+ * Após a hidratação, envia via onSubmit (preventDefault faz o React ignorar a prop `action`),
+ * para que os campos NÃO sejam limpos quando há erro de validação. Limpa só no sucesso.
+ * Antes da hidratação, a prop `action` garante envio por POST (nunca dados na URL).
+ */
 export function ActionForm({ action, children, className = "", resetOnSuccess = false }: { action: Action; children: ReactNode; className?: string; resetOnSuccess?: boolean }) {
-  const [state, formAction] = useActionState(action, null);
+  const [state, formAction, pending] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state?.ok && resetOnSuccess) ref.current?.reset();
   }, [state, resetOnSuccess]);
   return (
     <Ctx.Provider value={state}>
-      <form ref={ref} action={formAction} className={className} noValidate>
-        <FormMessage />
-        {children}
+      <form
+        ref={ref}
+        action={formAction /* antes da hidratação: envio seguro via POST para a server action */}
+        className={className}
+        noValidate
+        aria-busy={pending}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (pending) return;
+          const fd = new FormData(e.currentTarget);
+          startTransition(() => formAction(fd));
+        }}
+      >
+        <PendingCtx.Provider value={pending}>
+          <FormMessage />
+          {children}
+        </PendingCtx.Provider>
       </form>
     </Ctx.Provider>
   );
@@ -100,7 +120,8 @@ export function CheckboxField({ name, label, defaultChecked }: { name: string; l
 }
 
 export function Submit({ children, className = "btn-primary", pendingText = "Salvando…" }: { children: ReactNode; className?: string; pendingText?: string }) {
-  const { pending } = useFormStatus();
+  const status = useFormStatus();
+  const pending = useContext(PendingCtx) || status.pending;
   return (
     <button type="submit" disabled={pending} className={className}>
       {pending ? pendingText : children}

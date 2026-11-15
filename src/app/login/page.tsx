@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { signIn } from "@/lib/auth";
 import { AuthShell } from "@/components/auth-shell";
 import { CpfInput } from "@/components/cpf-input";
+import { isBootstrapOpen } from "@/modules/auth/bootstrap";
 
 export const metadata = { title: "Entrar" };
 
@@ -25,13 +26,22 @@ const MESSAGES: Record<string, { tone: "red" | "green"; text: string }> = {
   locked: { tone: "red", text: "Acesso temporariamente bloqueado por excesso de tentativas. Tente novamente em 15 minutos ou use “Esqueci minha senha”." },
   reset: { tone: "green", text: "Senha redefinida com sucesso. Entre com a nova senha." },
   changed: { tone: "green", text: "Senha alterada. Entre novamente com a nova senha." },
+  bootstrap: { tone: "green", text: "Administrador criado. Entre com seu CPF e a senha que você definiu." },
 };
+
+export const dynamic = "force-dynamic";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
   const { error, ok } = await searchParams;
   const msg = MESSAGES[error ?? ok ?? ""];
+  const firstAccess = await isBootstrapOpen();
   return (
     <AuthShell title="Entrar" subtitle="Use seu CPF e sua senha pessoal.">
+      {firstAccess && (
+        <Link href="/primeiro-acesso" className="mb-5 block rounded-md border border-gold-400 bg-gold-100 px-3 py-2 text-sm text-gold-600 hover:bg-gold-100/70">
+          Plataforma ainda sem usuários. <strong>Fazer o primeiro acesso →</strong>
+        </Link>
+      )}
       {msg && <p className={`mb-5 rounded-md px-3 py-2 text-sm ${msg.tone === "red" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>{msg.text}</p>}
       <form action={login} className="space-y-4">
         <div>

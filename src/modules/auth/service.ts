@@ -7,7 +7,7 @@ import { hashPassword, passwordPolicyErrors, verifyPassword } from "@/lib/passwo
 import type { CurrentUser } from "@/lib/session";
 import { cpf, email } from "@/modules/shared/validation";
 import { ValidationError } from "@/modules/shared/errors";
-import { enqueueNotification } from "@/modules/notifications/service";
+import { appUrl, enqueueNotification } from "@/modules/notifications/service";
 import { requestMeta } from "@/lib/request";
 
 export const RESET_TOKEN_MINUTES = 30;
@@ -40,7 +40,7 @@ export async function requestPasswordReset(raw: unknown): Promise<void> {
       data: { userId: user.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + RESET_TOKEN_MINUTES * 60_000), requestIp: ip },
     }),
   ]);
-  const link = `${process.env.APP_URL ?? "http://localhost:3000"}/redefinir-senha?token=${token}`;
+  const link = `${appUrl()}/redefinir-senha?token=${token}`;
   await enqueueNotification({
     recipientUserId: user.id,
     recipientEmail: user.email,

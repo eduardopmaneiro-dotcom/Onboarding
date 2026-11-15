@@ -10,4 +10,4 @@ if [[ "$FILE" == *.gpg ]]; then gpg --batch --decrypt --output "${FILE%.gpg}" "$
 read -r -p "Restaurar $FILE sobre $(echo "$DB_URL" | sed 's#//[^@]*@#//***@#')? Digite RESTAURAR: " ok
 [ "$ok" = "RESTAURAR" ] || { echo "Cancelado."; exit 1; }
 pg_restore --clean --if-exists --no-owner --no-privileges --dbname="$DB_URL" "$FILE"
-echo "Restauração concluída. Lembre-se de restaurar também storage/documents e usar a mesma DATA_ENCRYPTION_KEY."
+echo "Restauração concluída. Use a mesma DATA_ENCRYPTION_KEY e o mesmo CPF_HASH_PEPPER do ambiente de origem (documentos e CPFs são cifrados com elas)."

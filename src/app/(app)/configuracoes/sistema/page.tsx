@@ -34,7 +34,7 @@ export default async function SystemPage() {
             <ul className="space-y-2 text-sm text-slate-600">
               <li>• Backup lógico do PostgreSQL: <code className="rounded bg-slate-100 px-1 text-xs">npm run db:backup</code> (pg_dump comprimido, rotação automática, cifra GPG opcional).</li>
               <li>• Restauração: <code className="rounded bg-slate-100 px-1 text-xs">npm run db:restore -- &lt;arquivo&gt;</code>.</li>
-              <li>• Documentos: diretório <code className="rounded bg-slate-100 px-1 text-xs">storage/documents</code> já cifrado (AES-256-GCM) — incluído no mesmo script.</li>
+              <li>• Documentos: gravados cifrados (AES-256-GCM) no próprio banco — entram no mesmo backup. Em produção (Neon), há também restauração para um ponto no tempo.</li>
               <li>• Recomendação para produção: agendar diariamente (cron) e copiar para armazenamento externo com retenção de 30 dias.</li>
             </ul>
           </Card>
