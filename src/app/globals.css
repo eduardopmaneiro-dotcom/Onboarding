@@ -1,26 +1,59 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Identidade visual Riale Hotéis — azul-marinho institucional + dourado de hospitalidade */
+@theme {
+  --color-riale-950: #071a2e;
+  --color-riale-900: #0c2743;
+  --color-riale-800: #133559;
+  --color-riale-700: #1c4775;
+  --color-riale-600: #285c93;
+  --color-riale-100: #e6edf5;
+  --color-riale-50: #f3f6fa;
+  --color-gold-600: #9a7744;
+  --color-gold-500: #b08d57;
+  --color-gold-400: #c9a96e;
+  --color-gold-100: #f4ecdf;
+  --color-sand-50: #f8f6f1;
+  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-sand-50);
+  color: #1f2937;
+  font-family: var(--font-sans);
+}
+
+@layer components {
+.input {
+  @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-riale-600 focus:ring-2 focus:ring-riale-100 disabled:bg-slate-100;
+}
+.label {
+  @apply mb-1 block text-xs font-medium uppercase tracking-wide text-slate-600;
+}
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 bg-riale-900 text-white hover:bg-riale-800;
+}
+.btn-gold {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 bg-gold-500 text-white hover:bg-gold-600;
+}
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}
+.btn-sm {
+  @apply px-2.5 py-1 text-xs;
+}
+.card {
+  @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+}
+.table {
+  @apply w-full text-left text-sm;
+}
+.table th {
+  @apply border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+.table td {
+  @apply border-b border-slate-100 px-4 py-3 align-middle text-slate-700;
+}
 }

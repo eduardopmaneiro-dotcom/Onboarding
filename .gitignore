@@ -45,3 +45,9 @@ python_app/venv/
 python_app/**/__pycache__/
 python_app/db.sqlite3
 python_app/staticfiles/
+!.env.example
+
+# dados locais (nunca versionar)
+/storage/
+/backups/
+/tests/e2e/screenshots/

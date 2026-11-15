@@ -1,80 +1,53 @@
-import { signIn } from "@/lib/auth";
+import Link from "next/link";
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
+import { signIn } from "@/lib/auth";
+import { AuthShell } from "@/components/auth-shell";
+import { CpfInput } from "@/components/cpf-input";
+
+export const metadata = { title: "Entrar" };
 
 async function login(formData: FormData) {
   "use server";
   try {
-    await signIn("credentials", {
-      email: formData.get("email"),
-      password: formData.get("password"),
-      redirectTo: "/dashboard",
-    });
+    await signIn("credentials", { cpf: formData.get("cpf"), password: formData.get("password"), redirectTo: "/dashboard" });
   } catch (err) {
     if (err instanceof AuthError) {
-      redirect("/login?error=1");
+      const code = (err as AuthError & { code?: string }).code === "locked" ? "locked" : "invalid";
+      redirect(`/login?error=${code}`);
     }
     throw err;
   }
 }
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { error } = await searchParams;
+const MESSAGES: Record<string, { tone: "red" | "green"; text: string }> = {
+  invalid: { tone: "red", text: "CPF ou senha inválidos." },
+  locked: { tone: "red", text: "Acesso temporariamente bloqueado por excesso de tentativas. Tente novamente em 15 minutos ou use “Esqueci minha senha”." },
+  reset: { tone: "green", text: "Senha redefinida com sucesso. Entre com a nova senha." },
+  changed: { tone: "green", text: "Senha alterada. Entre novamente com a nova senha." },
+};
 
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; ok?: string }> }) {
+  const { error, ok } = await searchParams;
+  const msg = MESSAGES[error ?? ok ?? ""];
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <form
-        action={login}
-        className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-8 shadow-sm"
-      >
-        <h1 className="text-xl font-semibold text-slate-900">Rede Riale</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Onboarding &amp; Plano de Carreira
-        </p>
-
-        {error && (
-          <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-            E-mail ou senha inválidos.
-          </p>
-        )}
-
-        <div className="mt-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700">
-              E-mail
-            </label>
-            <input
-              name="email"
-              type="email"
-              required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              placeholder="voce@rialehoteis.com.br"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700">
-              Senha
-            </label>
-            <input
-              name="password"
-              type="password"
-              required
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            />
-          </div>
+    <AuthShell title="Entrar" subtitle="Use seu CPF e sua senha pessoal.">
+      {msg && <p className={`mb-5 rounded-md px-3 py-2 text-sm ${msg.tone === "red" ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-800"}`}>{msg.text}</p>}
+      <form action={login} className="space-y-4">
+        <div>
+          <label htmlFor="cpf" className="label">CPF</label>
+          <CpfInput />
         </div>
-
-        <button
-          type="submit"
-          className="mt-6 w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-        >
-          Entrar
-        </button>
+        <div>
+          <label htmlFor="password" className="label">Senha</label>
+          <input id="password" name="password" type="password" required autoComplete="current-password" className="input" />
+        </div>
+        <button type="submit" className="btn-primary w-full">Entrar</button>
       </form>
-    </div>
+      <div className="mt-6 flex items-center justify-between text-sm">
+        <Link href="/recuperar-senha" className="font-medium text-gold-600 hover:underline">Esqueci minha senha</Link>
+        <span className="text-xs text-slate-400">Primeiro acesso? Fale com o RH.</span>
+      </div>
+    </AuthShell>
   );
 }

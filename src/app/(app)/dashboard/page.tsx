@@ -1,91 +1,102 @@
-import { auth } from "@/lib/auth";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { employeeScopeWhere } from "@/lib/scope";
+import { can, requirePermission } from "@/lib/session";
+import { NAVIGATION } from "@/lib/navigation";
+import { ROLE_LABEL } from "@/lib/permissions";
+import { unitScope } from "@/modules/shared/scope";
+import { Badge, Card, PageHeader, Stat } from "@/components/ui";
 
-function Card({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-    </div>
-  );
-}
+export const metadata = { title: "Dashboard" };
 
-export default async function DashboardPage() {
-  const session = await auth();
-  const user = session!.user;
-  const where = employeeScopeWhere(user);
+const ACTION_LABEL: Record<string, string> = {
+  CREATE: "criou", UPDATE: "alterou", STATUS_CHANGE: "alterou status de", LOGIN: "entrou no sistema", LOGIN_FAILED: "falha de login", LOGOUT: "saiu",
+  PII_ACCESS: "visualizou CPF de", PERMISSION_CHANGE: "alterou permissão", PASSWORD_RESET: "redefiniu senha", PASSWORD_CHANGE: "trocou a senha",
+  PASSWORD_RESET_REQUEST: "pediu recuperação de senha", ACCESS_DENIED: "teve acesso negado", DOCUMENT_UPLOAD: "enviou documento", DOCUMENT_DOWNLOAD: "baixou documento",
+};
 
-  const [
-    totalEmployees,
-    inOnboarding,
-    activeStages,
-    overdueStages,
-    openPdis,
-    overdueChecklist,
-    pendingValidation,
-  ] = await Promise.all([
-    prisma.employee.count({ where }),
-    prisma.employee.count({ where: { ...where, status: "EM_ONBOARDING" } }),
-    prisma.onboardingStage.count({
-      where: { status: "EM_ANDAMENTO", process: { employee: where } },
-    }),
-    prisma.onboardingStage.count({
-      where: { status: "ATRASADA", process: { employee: where } },
-    }),
-    prisma.pDI.count({ where: { employee: where, status: { in: ["ABERTO", "EM_ANDAMENTO"] } } }),
-    prisma.checklistItem.count({ where: { employee: where, status: "ATRASADO" } }),
-    prisma.checklistItem.count({
-      where: { employee: where, status: "CONCLUIDO", validatedById: null },
-    }),
+export default async function Dashboard() {
+  const user = await requirePermission("dashboard.view");
+  const scope = unitScope(user);
+  const deptWhere = scope ? { unitId: scope, active: true } : { active: true };
+
+  const [units, departments, positions, managers, users, deptsWithoutManager, recent] = await Promise.all([
+    prisma.unit.count({ where: scope ? { id: scope, active: true } : { active: true } }),
+    prisma.department.count({ where: deptWhere }),
+    prisma.position.count({ where: { active: true } }),
+    prisma.manager.count({ where: { active: true, department: deptWhere } }),
+    can(user, "users.view") ? prisma.user.count({ where: { active: true, ...(scope ? { unitId: scope } : {}) } }) : Promise.resolve(null),
+    prisma.department.findMany({ where: { ...deptWhere, managers: { none: { active: true } } }, include: { unit: true }, orderBy: [{ unit: { name: "asc" } }, { name: "asc" }], take: 8 }),
+    can(user, "audit.view")
+      ? prisma.auditLog.findMany({ where: user.role === "ADMIN" ? {} : { OR: [{ actorRole: null }, { actorRole: { not: "ADMIN" } }] }, orderBy: { createdAt: "desc" }, take: 8, include: { actor: { select: { name: true } } } })
+      : Promise.resolve([]),
   ]);
 
-  const byUnit = await prisma.employee.groupBy({
-    by: ["unitId"],
-    where,
-    _count: { _all: true },
-  });
-  const units = await prisma.unit.findMany();
-  const unitName = (id: string) => units.find((u) => u.id === id)?.name ?? id;
+  const modules = NAVIGATION.filter((n) => n.href !== "/dashboard" && user.permissions.has(n.permission));
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Visão consolidada de onboarding, carreira e execução.
-      </p>
+    <>
+      <PageHeader title={`Olá, ${user.name.split(" ")[0]}`} subtitle={`${ROLE_LABEL[user.role]} · visão ${scope ? "da sua unidade" : "consolidada do grupo"}`} />
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Card label="Colaboradores no escopo" value={totalEmployees} />
-        <Card label="Em onboarding" value={inOnboarding} />
-        <Card label="Etapas em andamento" value={activeStages} />
-        <Card label="Etapas atrasadas" value={overdueStages} />
-        <Card label="PDIs em aberto" value={openPdis} />
-        <Card label="Itens de checklist atrasados" value={overdueChecklist} />
-        <Card label="Aguardando validação" value={pendingValidation} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <Stat label="Unidades" value={units} />
+        <Stat label="Departamentos" value={departments} />
+        <Stat label="Cargos (catálogo)" value={positions} />
+        <Stat label="Gestores ativos" value={managers} />
+        {users !== null && <Stat label="Usuários ativos" value={users} />}
       </div>
 
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold text-slate-700">Colaboradores por unidade</h2>
-        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
-              <tr>
-                <th className="px-4 py-2">Unidade</th>
-                <th className="px-4 py-2">Colaboradores</th>
-              </tr>
-            </thead>
-            <tbody>
-              {byUnit.map((row) => (
-                <tr key={row.unitId} className="border-t border-slate-100">
-                  <td className="px-4 py-2">{unitName(row.unitId)}</td>
-                  <td className="px-4 py-2">{row._count._all}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <Card title="Módulos da plataforma" className="xl:col-span-2">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {modules.map((m) => (
+              <Link key={m.href} href={m.href} className="rounded-lg border border-slate-200 p-4 transition hover:border-gold-400 hover:shadow-sm">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium text-riale-900">{m.label}</p>
+                  {m.ready ? <Badge tone="green">Disponível</Badge> : <Badge tone="gold">{m.phase?.split(" — ")[0]}</Badge>}
+                </div>
+                <p className="mt-1 text-xs text-slate-500">{m.description}</p>
+              </Link>
+            ))}
+          </div>
+        </Card>
+
+        <div className="space-y-6">
+          <Card title="Departamentos sem gestor">
+            {deptsWithoutManager.length === 0 ? (
+              <p className="text-sm text-slate-500">Todos os departamentos ativos têm gestor.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {deptsWithoutManager.map((d) => (
+                  <li key={d.id} className="flex justify-between">
+                    <span className="text-slate-700">{d.name}</span>
+                    <span className="text-xs text-slate-400">{d.unit.name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {can(user, "managers.manage") && (
+              <Link href="/configuracoes/gestores" className="mt-4 inline-block text-xs font-medium text-gold-600 hover:underline">Cadastrar gestores →</Link>
+            )}
+          </Card>
+
+          {recent.length > 0 && (
+            <Card title="Atividade recente">
+              <ul className="space-y-3 text-sm">
+                {recent.map((r) => (
+                  <li key={r.id}>
+                    <p className="text-slate-700">
+                      <span className="font-medium">{r.actor?.name ?? "Anônimo"}</span> {ACTION_LABEL[r.action] ?? r.action.toLowerCase()}{" "}
+                      {!["User", "Auth"].includes(r.entityType) && <span className="text-slate-500">{r.entityType}</span>}
+                    </p>
+                    <p className="text-xs text-slate-400">{r.createdAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}</p>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/configuracoes/auditoria" className="mt-4 inline-block text-xs font-medium text-gold-600 hover:underline">Ver auditoria completa →</Link>
+            </Card>
+          )}
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,75 +1,29 @@
-import { auth, signOut } from "@/lib/auth";
-import Link from "next/link";
-import { can } from "@/lib/rbac";
+import { redirect } from "next/navigation";
+import { signOut } from "@/lib/auth";
+import { requireUser } from "@/lib/session";
+import { NAVIGATION } from "@/lib/navigation";
+import { ROLE_LABEL } from "@/lib/permissions";
+import { prisma } from "@/lib/prisma";
+import { recordAudit } from "@/lib/audit";
+import { Sidebar } from "@/components/sidebar";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/colaboradores", label: "Colaboradores" },
-  { href: "/onboarding", label: "Onboarding" },
-  { href: "/carreira", label: "Plano de Carreira" },
-  { href: "/checklists", label: "Checklists" },
-  { href: "/pdi", label: "PDI" },
-];
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  if (user.mustChangePassword) redirect("/trocar-senha");
 
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const session = await auth();
-  const role = session!.user.role;
+  const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId }, select: { name: true } }) : null;
+  const items = NAVIGATION.filter((n) => user.permissions.has(n.permission)).map(({ href, label, icon, ready }) => ({ href, label, icon, ready }));
+
+  async function logout() {
+    "use server";
+    await recordAudit({ entityType: "User", entityId: user.id, action: "LOGOUT", actorId: user.id, actorRole: user.role });
+    await signOut({ redirectTo: "/login" });
+  }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
-      <aside className="flex w-60 flex-col border-r border-slate-200 bg-white">
-        <div className="px-5 py-5">
-          <p className="text-sm font-semibold text-slate-900">Rede Riale</p>
-          <p className="text-xs text-slate-500">{role.replace("_", " ")}</p>
-        </div>
-        <nav className="flex-1 space-y-1 px-3">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-            >
-              {item.label}
-            </Link>
-          ))}
-          {can(role, "viewAudit") && (
-            <Link
-              href="/auditoria"
-              className="block rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Auditoria
-            </Link>
-          )}
-          {can(role, "manageTemplates") && (
-            <Link
-              href="/admin"
-              className="block rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Administração
-            </Link>
-          )}
-        </nav>
-        <div className="border-t border-slate-200 p-3">
-          <p className="truncate px-3 text-xs text-slate-500">
-            {session!.user.email}
-          </p>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-          >
-            <button className="mt-1 w-full rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-100">
-              Sair
-            </button>
-          </form>
-        </div>
-      </aside>
-      <main className="flex-1 overflow-y-auto p-8">{children}</main>
+    <div className="min-h-screen lg:flex">
+      <Sidebar items={items} logout={logout} user={{ name: user.name, roleLabel: ROLE_LABEL[user.role], scope: unit?.name ?? "Todas as unidades" }} />
+      <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">{children}</main>
     </div>
   );
 }

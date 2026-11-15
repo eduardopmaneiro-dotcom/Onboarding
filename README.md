@@ -1,149 +1,175 @@
-# Rede Riale — Onboarding & Plano de Carreira (MVP)
+# Riale RH — Plataforma interna de Recursos Humanos
 
-Sistema interno de gestão de onboarding (90 dias), plano de carreira, PDI,
-checklists, dashboards e trilha de auditoria para a Rede Riale (Brisa Barra,
-Imperial e Vilamar). Stack: **Next.js (App Router) + TypeScript + Tailwind +
-Prisma + PostgreSQL + NextAuth (Credentials)**.
+Plataforma web interna da **Riale Hotéis** (Brisa Barra, Imperial e Vilamar). Ela foi
+construída para receber, em fases, os módulos de recrutamento, admissão, remuneração,
+indicadores e carreira.
 
-Regras de negócio extraídas de RH-ONB-01, RH-ONB-02, RH-CAR-01, RH-PDL-01 e
-RH-SOP-01 (pasta "onboarding").
+> **Fase atual: 1 — Fundação.** Inclui autenticação por CPF + senha, perfis e permissões,
+> estrutura organizacional (unidades, departamentos, cargos, gestores e superiores diretos,
+> usuários do RH), API interna `/api/v1`, auditoria, proteção de dados pessoais (LGPD),
+> documentos cifrados e backups. Os módulos de negócio aparecem no menu com a indicação
+> **"em breve"**.
 
-## Escopo confirmado x inferido
+![Dashboard](docs/img/02-dashboard-admin.png)
 
-**Confirmado nos documentos:**
-- Onboarding de 90 dias em 8 etapas operacionais, dois macroperíodos
-  (Período 1: D-7 a D45 — adaptação/padronização; Período 2: D46 a D90 —
-  produtividade/autonomia).
-- Pesos de avaliação D45/D90 (Metas 35%, Domínio técnico 25%, POPs 20%,
-  Presença 15%, Integração 5%) e alerta para nota < 5,5.
-- 7 níveis de carreira (N1–N7) e 7 fatores de promoção com pesos fixos
-  (Performance 25%, Competência 20%, Comportamento 15%, Aderência cultural
-  10%, Potencial de liderança 10%, PDI 10%, Conduta 10%); nota mínima 70/100;
-  janelas em fevereiro/agosto; comitê obrigatório para N5+.
-- Critérios de entrada no PDL (avaliação ≥ 8,0 em 2 ciclos, 18+ meses de
-  casa, zero advertência em 12 meses, PDI ≥ 80%, indicação do gestor,
-  aceite voluntário).
-- Critérios de buddy (avaliação ≥ 8,0, 12+ meses, zero advertência em 6
-  meses, aceite voluntário).
+| Documento | Conteúdo |
+|---|---|
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, decisões técnicas, modelo de dados, segurança/LGPD, roadmap e riscos |
+| Este README | Instalação, execução, usuários de teste, testes, backup e deploy |
 
-**Inferido/proposto** (marcado no schema com comentários):
-- Nomes exatos de itens de checklist por etapa — o documento descreve o
-  conteúdo da jornada, não uma estrutura de dados; foi modelado um
-  `ChecklistItemTemplate` por marco citado no texto.
-- Requisitos de avanço de carreira (`CareerStage.masteryCriteria`) ficaram
-  como texto livre por nível, em vez de regras totalmente estruturadas,
-  porque o nível de detalhe varia muito entre trilhas (algumas têm metas
-  numéricas, outras são qualitativas).
-- RBAC (perfis ADMIN/RH_CORPORATIVO/RH_UNIDADE/GESTOR/COLABORADOR/
-  DIRETORIA_READONLY) — não está nos documentos, é requisito do prompt.
+---
 
-## O que está no MVP
+## 1. Requisitos
 
-- Autenticação (NextAuth Credentials + bcrypt) e RBAC por rota/escopo de dados.
-- Estrutura organizacional: unidades, departamentos, cargos, trilhas de carreira.
-- Onboarding: template oficial de 8 etapas + processo real por colaborador,
-  com checklist gerado a partir do template.
-- Checklist compartilhado (onboarding/carreira/PDI) com conclusão e validação.
-- PDI com origem, gap, objetivo, executor/acompanhamento e % de conclusão.
-- Plano de carreira: trilhas e níveis parametrizados no banco (não hardcoded).
-- Dashboard com indicadores por escopo (unidade/gestor/colaborador).
-- Trilha de auditoria imutável (`AuditLog`) com ator, papel, valores
-  anterior/novo e colaborador impactado.
-- Seed com 3 unidades, 1 onboarding real em andamento e 1 usuário por perfil.
+| Item | Versão |
+|---|---|
+| Node.js | 20 LTS ou superior (testado com 22) |
+| PostgreSQL | 14 ou superior (testado com 16) — ou Docker |
+| npm | 10+ |
 
-## O que fica para a fase 2
-
-- Programa de Desenvolvimento de Lideranças (PDL): schema já modelado
-  (`PDLCandidacy`), faltam telas e fluxo de candidatura/comitê.
-- `PromotionScore` (cálculo do score de promoção e ata de comitê): schema
-  pronto, sem UI.
-- Scripts de comunicação (RH-SOP-01) como guias contextuais dentro do app.
-- Exportação de relatórios em PDF/Excel.
-- Integração real com Sólides (hoje é apenas referenciada nos textos/regras).
-- MFA, reset de senha self-service, notificações por e-mail/WhatsApp.
-- Reabertura de etapa com fluxo de aprovação dedicado (hoje só o campo existe).
-
-## LGPD — decisões práticas do MVP
-
-- **Minimização**: não há campos de CPF, dados de saúde, dados bancários ou
-  biométricos no modelo — apenas o necessário para onboarding/carreira.
-- **Escopo por perfil**: toda query de colaboradores passa por
-  `employeeScopeWhere()` (`src/lib/scope.ts`), nunca lista além do papel.
-- **Auditoria**: qualquer mutação relevante grava em `AuditLog` antes de
-  responder ao usuário — base para investigação e para o direito de
-  explicação do colaborador.
-- **Separação de dados**: dados cadastrais (`Employee`, `Position`) ficam
-  separados de dados de desenvolvimento (`PDI`, `Evaluation`, `PDLCandidacy`),
-  permitindo políticas de acesso e retenção diferentes no futuro.
-- **Lacunas que dependem de governança interna da empresa** (não resolvidas
-  só com código):
-  - Política de retenção/descarte (ex.: por quanto tempo manter avaliações
-    de colaboradores desligados) — recomenda-se definir prazo e automatizar
-    expurgo/anonimização.
-  - Processo formal de atendimento a titulares (acesso, correção, exclusão).
-  - Quem pode exportar relatórios e para onde (hoje a permissão existe no
-    RBAC, mas não há DLP/marca d'água nos exports).
-  - Acordo de tratamento de dados com a Sólides (terceiro mencionado nos
-    documentos como sistema de registro oficial).
-
-## Setup local (Next.js)
+## 2. Instalação (primeira vez)
 
 ```bash
-cp .env.example .env   # ajuste DATABASE_URL e gere AUTH_SECRET (openssl rand -base64 32)
+git clone <repositório> && cd Onboarding
 npm install
-npm run db:migrate     # cria o schema no Postgres
-npm run db:seed        # popula unidades, cargos, trilhas, 1 onboarding real e usuários
+```
+
+Suba o PostgreSQL. Se você tem Docker, use o arquivo incluído:
+
+```bash
+docker compose up -d
+```
+
+Crie o `.env` a partir do modelo e **gere segredos próprios**:
+
+```bash
+cp .env.example .env
+```
+
+```bash
+openssl rand -base64 32
+```
+
+Rode o comando acima três vezes e cole cada resultado em `AUTH_SECRET`,
+`CPF_HASH_PEPPER` e `DATA_ENCRYPTION_KEY`, no `.env`.
+
+> ⚠️ `CPF_HASH_PEPPER` e `DATA_ENCRYPTION_KEY` protegem os CPFs e os documentos.
+> **Se forem perdidas, os dados cifrados ficam ilegíveis.** Em produção, guarde-as em
+> um cofre (AWS Secrets Manager, 1Password, Vault), separadas dos backups do banco.
+
+Crie as tabelas e carregue os dados iniciais:
+
+```bash
+npx prisma migrate deploy
+```
+
+```bash
+npm run db:seed
+```
+
+## 3. Execução
+
+Desenvolvimento (recarga automática):
+
+```bash
 npm run dev
 ```
 
-## Versão Python (Django) — `python_app/`
-
-Existe uma segunda implementação do mesmo MVP em **Python/Django + PostgreSQL**,
-na pasta `python_app/`. Ela cobre os mesmos módulos centrais (autenticação,
-RBAC, escopo por papel, onboarding com checklist, PDI, plano de carreira,
-dashboard e auditoria imutável), usando templates server-side (Django
-templates) em vez de Next.js/React — não é necessário Node.js para rodá-la.
+Produção local:
 
 ```bash
-cd python_app
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-cp .env.example .env            # ajuste DJANGO_SECRET_KEY e dados do Postgres
-# crie o banco antes (ex.: createdb riale_django ou psql -c "CREATE DATABASE riale_django;")
-
-python manage.py migrate
-python manage.py seed_data      # popula unidades, cargos, trilhas, 1 onboarding real e usuários
-python manage.py runserver
+npm run build && npm start
 ```
 
-Acesse `http://localhost:8000`. Os usuários de teste são os mesmos da tabela
-abaixo (senha `Riale@2026`).
+Acesse **http://localhost:3000**.
 
-Diferenças relevantes em relação à versão Next.js:
-- Frontend renderizado pelo próprio Django (sem build de JS/CSS além do Tailwind via CDN).
-- `python_app/core/rbac.py` e `python_app/core/scope.py` equivalem a
-  `src/lib/rbac.ts`/`src/lib/scope.ts`.
-- `python_app/core/audit.py` (`record_audit()`) equivale a `src/lib/audit.ts`.
-- Cobre o mesmo recorte de MVP da seção "O que está no MVP" abaixo; os itens
-  da "fase 2" (PDL, PromotionScore, exportação, etc.) também não foram
-  portados nesta versão.
+### Usuários de teste (criados pelo seed)
 
-Usuários de teste (senha `Riale@2026` para todos, em ambas as versões):
+Senha de todos: **`Riale@2026Seguro`**
 
-| Papel | E-mail |
+| Perfil | Nome | CPF (login) | Escopo |
+|---|---|---|---|
+| Administrador | Administrador do Sistema | `529.982.247-25` | Todas as unidades |
+| RH (corporativo) | Carla Mendes | `111.444.777-35` | Todas as unidades |
+| RH (unidade) | Paulo Henrique Lima | `390.533.447-05` | Apenas Brisa Barra |
+| Gestor | Marina Souza | `168.995.350-09` | Leitura; vinculada ao cadastro de gestora da Recepção (Brisa Barra) |
+
+> Estes CPFs são fictícios (apenas válidos matematicamente). **Antes de qualquer uso real,
+> desative ou exclua esses usuários e cadastre os reais**: os usuários criados pela interface
+> são obrigados a trocar a senha no primeiro acesso.
+
+## 4. Testes
+
+| Comando | O que verifica |
 |---|---|
-| ADMIN | admin@rialehoteis.com.br |
-| RH_CORPORATIVO | rh.corporativo@rialehoteis.com.br |
-| RH_UNIDADE | rh.brisabarra@rialehoteis.com.br |
-| GESTOR | marina.souza@rialehoteis.com.br |
-| COLABORADOR | julia.ramos@rialehoteis.com.br |
-| DIRETORIA_READONLY | diretoria@rialehoteis.com.br |
+| `npm run typecheck` | Tipagem TypeScript |
+| `npm run lint` | Padrões de código |
+| `npm test` | Unitários: CPF, criptografia, política de senha, mascaramento da auditoria, catálogo de permissões |
+| `npm run test:integration` | Serviços contra o PostgreSQL real: escopo por unidade, anti-escalonamento de perfil, hierarquia sem ciclos, CPF protegido, imutabilidade da auditoria, integridade referencial |
+| `npm run test:e2e` | Navegador real (Playwright) contra o servidor rodando: login, perfis, cadastros, validação, LGPD, documentos, recuperação de senha, bloqueio, responsividade |
 
-## Próximos passos de deploy
+O E2E exige o servidor no ar (`npm start`) e o Playwright instalado
+(`npm i -D playwright && npx playwright install chromium`). Capturas de tela ficam em
+`tests/e2e/screenshots/`.
 
-- Banco gerenciado (RDS/Cloud SQL/Neon) com backups automáticos.
-- `AUTH_SECRET` único por ambiente, nunca commitado.
-- Rodar `prisma migrate deploy` no pipeline de deploy (não `migrate dev`).
-- Colocar a aplicação detrás de HTTPS com cabeçalhos de segurança padrão do Next.
+**Resultado na entrega:** 7/7 unitários, 10/10 de integração e 15/15 cenários E2E,
+executados após `prisma migrate reset` (instalação do zero).
+
+## 5. Backup e restauração
+
+```bash
+npm run db:backup
+```
+
+Gera em `backups/` o dump do banco (`pg_dump`, formato custom), um pacote com os
+documentos (que já ficam cifrados em disco) e um arquivo de checksums SHA-256. Também
+apaga os backups com mais de `BACKUP_RETENTION_DAYS` dias. Se `BACKUP_GPG_RECIPIENT`
+estiver definido, os arquivos são cifrados com GPG.
+
+```bash
+npm run db:restore -- backups/riale_rh_db_<data>.dump
+```
+
+Restauração com confirmação explícita. A restauração foi testada nesta entrega: um banco
+restaurado reproduziu contagens e travas idênticas às do original.
+
+**Produção:** agende o backup diariamente (cron/systemd timer) e copie para um
+armazenamento externo (S3 com versionamento ou outra nuvem). Um backup que nunca foi
+restaurado não é backup: faça um teste de restauração por trimestre.
+
+## 6. Deploy (resumo)
+
+1. Banco PostgreSQL gerenciado (RDS, Cloud SQL, Neon, Supabase) com backup automático e
+   *point-in-time recovery*.
+2. Variáveis de ambiente de produção num cofre de segredos; `APP_URL` com HTTPS.
+3. No pipeline: `npm ci && npx prisma migrate deploy && npm run build && npm start`.
+4. HTTPS obrigatório. Os cabeçalhos de segurança (CSP, HSTS, X-Frame-Options) já vêm
+   configurados em `next.config.ts`.
+5. Monitoramento: `GET /api/v1/health` (público, sem dados).
+6. Antes de abrir para o RH: trocar os usuários de teste, configurar o envio de e-mails
+   (fase de comunicações) e definir o e-mail do encarregado (DPO) em
+   *Configurações › Sistema e LGPD*.
+
+## 7. Estrutura de pastas
+
+```
+prisma/
+  schema.prisma            modelo de dados (PostgreSQL)
+  migrations/              migrações versionadas (inclui travas de banco)
+  seed.ts                  dados iniciais idempotentes
+src/
+  app/
+    (app)/                 área autenticada (menu lateral)
+      dashboard/ vagas/ candidatos/ entrevistas/ admissoes/ colaboradores/
+      remuneracao/ pesquisa-salarial/ cargos/ relatorios/ configuracoes/
+    api/v1/                API interna versionada
+    login/ recuperar-senha/ redefinir-senha/ trocar-senha/ acesso-negado/
+  modules/                 regras de negócio por módulo (usadas pela UI e pela API)
+    org/ managers/ users/ auth/ permissions/ settings/ documents/ notifications/ audit/ shared/
+  lib/                     infraestrutura: auth, sessão, cripto, CPF, auditoria, permissões
+  components/              componentes de interface
+tests/                     unit/ integration/ e2e/
+scripts/                   backup.sh, restore.sh
+docs/                      arquitetura e imagens
+python_app/                LEGADO — versão Django do MVP anterior (congelada; ver LEGADO.md)
+```

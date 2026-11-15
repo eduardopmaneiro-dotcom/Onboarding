@@ -1,5 +1,12 @@
-// Rede Riale — Onboarding & Plano de Carreira
-// Fonte de regras: pasta "onboarding" (RH-ONB-01, RH-ONB-02, RH-CAR-01, RH-PDL-01, RH-SOP-01)
+// ════════════════════════════════════════════════════════════════════════════
+// Plataforma de RH — Riale Hotéis
+// Fase 1: fundação (identidade, permissões, estrutura organizacional, segurança)
+// Tabelas de recrutamento/admissão já preparadas para a Fase 2.
+// Modelos de onboarding/carreira/PDI preservados do MVP anterior.
+// Convenção: dados pessoais sensíveis (CPF) NUNCA em texto puro —
+//   *Hash   = HMAC-SHA256 com pepper (busca/unicidade)
+//   *Enc    = AES-256-GCM (exibição restrita, sempre auditada)
+// ════════════════════════════════════════════════════════════════════════════
 
 generator client {
   provider = "prisma-client-js"
@@ -10,63 +17,113 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ───────────────────────── RBAC / IDENTIDADE ─────────────────────────
+// ───────────────────────── IDENTIDADE E ACESSO ─────────────────────────
 
 enum Role {
-  ADMIN
-  RH_CORPORATIVO
-  RH_UNIDADE
-  GESTOR
-  COLABORADOR
-  DIRETORIA_READONLY
+  ADMIN // Administrador do sistema
+  RH // Equipe de Recursos Humanos (corporativo ou de unidade)
+  GESTOR // Gestor de área/departamento
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role
-  active       Boolean  @default(true)
-  unitId       String?
-  unit         Unit?    @relation(fields: [unitId], references: [id])
-  employeeId   String?  @unique
-  employee     Employee? @relation("UserEmployee", fields: [employeeId], references: [id])
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  cpfHash            String    @unique // HMAC — login e unicidade
+  cpfEnc             String // AES-GCM — exibição restrita
+  passwordHash       String
+  role               Role
+  active             Boolean   @default(true)
+  /// RH de unidade fica limitado à unidade; nulo = corporativo (todas)
+  unitId             String?
+  unit               Unit?     @relation(fields: [unitId], references: [id])
+  failedLoginCount   Int       @default(0)
+  lockedUntil        DateTime?
+  mustChangePassword Boolean   @default(false)
+  passwordChangedAt  DateTime?
+  lastLoginAt        DateTime?
+  createdById        String?
+  createdBy          User?     @relation("UserCreatedBy", fields: [createdById], references: [id])
+  createdUsers       User[]    @relation("UserCreatedBy")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  auditLogs    AuditLog[] @relation("ActorUser")
+  manager             Manager?
+  passwordResetTokens PasswordResetToken[]
+  auditLogs           AuditLog[]           @relation("ActorUser")
+  notifications       Notification[]
+  documentsUploaded   Document[]
+  settingsUpdated     Setting[]
+  movementsRecorded   MovementHistory[]
 
+  @@index([role])
   @@index([unitId])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique // ex.: "org.manage"
+  module      String // ex.: "estrutura", "usuarios"
+  description String
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  role         Role
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedAt    DateTime   @default(now())
+
+  @@id([role, permissionId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique // SHA-256 do token; o token em claro só existe no e-mail
+  expiresAt DateTime
+  usedAt    DateTime?
+  requestIp String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 // ───────────────────────── ESTRUTURA ORGANIZACIONAL ─────────────────────────
 
 model Unit {
-  // Brisa Barra, Imperial, Vilamar
+  // Brisa Barra, Imperial, Vilamar (+ futuras unidades)
   id        String   @id @default(cuid())
   name      String   @unique
   code      String   @unique
+  city      String?
+  state     String?  @db.Char(2)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users      User[]
-  employees  Employee[]
   departments Department[]
+  users       User[]
 }
 
 model Department {
-  // Recepção, Governança, Cozinha, Salão, Reservas, Manutenção, RH, Controladoria, Marketing...
-  id        String   @id @default(cuid())
-  name      String
-  unitId    String
-  unit      Unit     @relation(fields: [unitId], references: [id])
-  active    Boolean  @default(true)
-
-  positions Position[]
-  employees Employee[]
+  id            String            @id @default(cuid())
+  name          String
+  code          String?
+  unitId        String
+  unit          Unit              @relation(fields: [unitId], references: [id])
+  active        Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  employees     Employee[]
+  jobOpenings   JobOpening[]
+  movementsFrom MovementHistory[] @relation("MovementFromDept")
+  movementsTo   MovementHistory[] @relation("MovementToDept")
+  managers      Manager[] // mais de um gestor por departamento é permitido
 
   @@unique([unitId, name])
+  @@index([unitId])
 }
 
 enum CareerLevel {
@@ -80,46 +137,51 @@ enum CareerLevel {
 }
 
 model CareerTrack {
-  // Trilha: Governança e Hospedagem, Recepção e Portaria, A&B Cozinha, A&B Salão,
-  // Reservas/Comercial/Eventos, Manutenção, RH/Controladoria/Marketing
-  id          String   @id @default(cuid())
-  name        String   @unique
+  id          String  @id @default(cuid())
+  name        String  @unique
   description String?
-  active      Boolean  @default(true)
+  active      Boolean @default(true)
 
-  positions   Position[]
-  stages      CareerStage[]
+  positions Position[]
+  stages    CareerStage[]
 }
 
 model Position {
-  // Cargo dentro de um nível e trilha (ex.: Camareira Sênior = N3, trilha Governança)
-  id            String      @id @default(cuid())
-  title         String
-  level         CareerLevel
-  departmentId  String
-  department    Department  @relation(fields: [departmentId], references: [id])
-  careerTrackId String?
-  careerTrack   CareerTrack? @relation(fields: [careerTrackId], references: [id])
-  active        Boolean     @default(true)
-
-  employees     Employee[]
+  // Cargo: catálogo corporativo único (comparável entre unidades — base para remuneração e carreira).
+  // Onde a pessoa trabalha é dado pelo Departamento (que pertence a uma Unidade).
+  id                  String               @id @default(cuid())
+  title               String
+  code                String?              @unique // CBO ou código interno
+  level               CareerLevel
+  description         String?              @db.Text
+  careerTrackId       String?
+  careerTrack         CareerTrack?         @relation(fields: [careerTrackId], references: [id])
+  isLeadership        Boolean              @default(false)
+  active              Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  employees           Employee[]
+  jobOpenings         JobOpening[]
   onboardingTemplates OnboardingTemplate[]
-  pdlCandidacies PDLCandidacy[]
+  pdlCandidacies      PDLCandidacy[]
+  movementsFrom       MovementHistory[]    @relation("MovementFrom")
+  movementsTo         MovementHistory[]    @relation("MovementTo")
+  managers            Manager[]
 
-  @@index([departmentId])
+  @@unique([title])
 }
 
 model CareerStage {
-  // Um nível dentro de uma trilha, com requisitos de avanço (regras inferidas a partir do RH-CAR-01)
-  id            String      @id @default(cuid())
-  careerTrackId String
-  careerTrack   CareerTrack @relation(fields: [careerTrackId], references: [id])
-  level         CareerLevel
-  typicalMonths String?     // "12-24 meses" — texto livre, conforme documento original
-  masteryCriteria String    @db.Text // "O que dominar para avançar"
-  order         Int
+  id              String      @id @default(cuid())
+  careerTrackId   String
+  careerTrack     CareerTrack @relation(fields: [careerTrackId], references: [id])
+  level           CareerLevel
+  typicalMonths   String?
+  masteryCriteria String      @db.Text
+  order           Int
 
-  requirements  StageRequirement[]
+  requirements StageRequirement[]
+
   @@unique([careerTrackId, level])
 }
 
@@ -132,100 +194,454 @@ enum RequirementType {
 }
 
 model StageRequirement {
-  id            String           @id @default(cuid())
+  id            String          @id @default(cuid())
   careerStageId String
-  careerStage   CareerStage      @relation(fields: [careerStageId], references: [id])
+  careerStage   CareerStage     @relation(fields: [careerStageId], references: [id])
   type          RequirementType
   description   String
-  targetValue   String?          // ex.: "conformidade >= 95%"
+  targetValue   String?
 }
 
-// Pesos de promoção fixos no RH-CAR-01 (Performance 25%, Competência 20%, Comportamento 15%,
-// Aderência cultural 10%, Potencial liderança 10%, PDI 10%, Conduta 10%). Pontuação mínima: 70/100.
-model PromotionScore {
-  id              String   @id @default(cuid())
-  employeeId      String
-  employee        Employee @relation(fields: [employeeId], references: [id])
-  cycle           String   // ex.: "2026-S1" (janelas: fevereiro e agosto)
-  performance     Float    @default(0)
-  competency      Float    @default(0)
-  behavior        Float    @default(0)
-  culturalFit     Float    @default(0)
-  leadershipPotential Float @default(0)
-  pdiCompletion   Float    @default(0)
-  conduct         Float    @default(0)
-  totalScore      Float    @default(0)
-  committeeRequired Boolean @default(false) // obrigatório para N5+
-  committeeMinutes  String? @db.Text // ata do comitê
-  decision        String?  // aprovado / negado / aguardando ciclo
-  createdAt       DateTime @default(now())
+/// Gestor: cadastro próprio (nem todo gestor precisa ter login).
+/// Identificação por CPF (protegido) e/ou matrícula interna — ao menos um é obrigatório (validado na aplicação).
+/// O e-mail será usado pelas comunicações automáticas (tabela Notification).
+model Manager {
+  id               String     @id @default(cuid())
+  name             String
+  email            String     @unique
+  cpfHash          String?    @unique
+  cpfEnc           String?
+  internalId       String?    @unique // matrícula
+  positionId       String
+  position         Position   @relation(fields: [positionId], references: [id])
+  departmentId     String // departamento gerido (a unidade é derivada do departamento)
+  department       Department @relation(fields: [departmentId], references: [id])
+  /// Superior direto (outro gestor) — hierarquia auto-relacionada
+  directSuperiorId String?
+  directSuperior   Manager?   @relation("ManagerHierarchy", fields: [directSuperiorId], references: [id])
+  directReports    Manager[]  @relation("ManagerHierarchy")
+  /// Login opcional (perfil GESTOR)
+  userId           String?    @unique
+  user             User?      @relation(fields: [userId], references: [id])
+  active           Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
 
-  @@index([employeeId])
+  employees           Employee[]
+  jobOpenings         JobOpening[]
+  interviewsConducted Interview[]
+  movementsFrom       MovementHistory[] @relation("MovementFromManager")
+  movementsTo         MovementHistory[] @relation("MovementToManager")
+
+  @@index([departmentId])
 }
 
-// ───────────────────────── COLABORADOR ─────────────────────────
+// ───────────────────────── COLABORADORES ─────────────────────────
 
 enum EmployeeStatus {
   PRE_ADMISSAO
   EM_ONBOARDING
   ATIVO
   PERIODO_ESTENDIDO
-  DESVINCULADO
+  AFASTADO
+  DESLIGADO
+}
+
+enum ContractType {
+  CLT
+  PJ
+  ESTAGIO
+  TEMPORARIO
 }
 
 model Employee {
-  id            String         @id @default(cuid())
-  fullName      String
-  unitId        String
-  unit          Unit           @relation(fields: [unitId], references: [id])
-  departmentId  String
-  department    Department     @relation(fields: [departmentId], references: [id])
-  positionId    String
-  position      Position       @relation(fields: [positionId], references: [id])
-  managerId     String?
-  manager       Employee?      @relation("ManagerEmployees", fields: [managerId], references: [id])
-  reports       Employee[]     @relation("ManagerEmployees")
-  buddyId       String?
-  buddy         Employee?      @relation("BuddyEmployees", fields: [buddyId], references: [id])
-  buddyFor      Employee[]     @relation("BuddyEmployees")
-  status        EmployeeStatus @default(PRE_ADMISSAO)
-  admissionDate DateTime
-  active        Boolean        @default(true)
+  id              String         @id @default(cuid())
+  fullName        String
+  internalId      String?        @unique // matrícula
+  cpfHash         String?        @unique
+  cpfEnc          String?
+  email           String?
+  contractType    ContractType   @default(CLT)
+  departmentId    String // departamento → unidade (sem duplicar a unidade)
+  department      Department     @relation(fields: [departmentId], references: [id])
+  positionId      String
+  position        Position       @relation(fields: [positionId], references: [id])
+  managerId       String?
+  manager         Manager?       @relation(fields: [managerId], references: [id])
+  buddyId         String?
+  buddy           Employee?      @relation("BuddyEmployees", fields: [buddyId], references: [id])
+  buddyFor        Employee[]     @relation("BuddyEmployees")
+  status          EmployeeStatus @default(PRE_ADMISSAO)
+  admissionDate   DateTime
+  terminationDate DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  user          User?          @relation("UserEmployee")
-  onboardings   OnboardingProcess[]
-  pdis          PDI[]
+  movements       MovementHistory[]
+  candidateOrigin Candidate?
+  onboardings     OnboardingProcess[]
+  pdis            PDI[]
   promotionScores PromotionScore[]
-  pdlCandidacies PDLCandidacy[]
-  auditImpacted AuditLog[]     @relation("ImpactedEmployee")
+  pdlCandidacies  PDLCandidacy[]
+  auditImpacted   AuditLog[]          @relation("ImpactedEmployee")
 
-  responsibleStages   OnboardingStage[]
-  checklistItems      ChecklistItem[]
-  checklistResponsibleFor ChecklistItem[] @relation("ChecklistResponsible")
-  checklistCompletedFor   ChecklistItem[] @relation("ChecklistCompletedBy")
-  checklistValidatedFor   ChecklistItem[] @relation("ChecklistValidatedBy")
-  pdiExecutorFor      PDI[] @relation("PDIExecutor")
-  pdiMonitorFor       PDI[] @relation("PDIMonitor")
-  evaluationsGiven    Evaluation[]
+  responsibleStages       OnboardingStage[]
+  checklistItems          ChecklistItem[]
+  checklistResponsibleFor ChecklistItem[]   @relation("ChecklistResponsible")
+  checklistCompletedFor   ChecklistItem[]   @relation("ChecklistCompletedBy")
+  checklistValidatedFor   ChecklistItem[]   @relation("ChecklistValidatedBy")
+  pdiExecutorFor          PDI[]             @relation("PDIExecutor")
+  pdiMonitorFor           PDI[]             @relation("PDIMonitor")
+  evaluationsGiven        Evaluation[]
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  @@index([unitId])
   @@index([departmentId])
+  @@index([positionId])
   @@index([managerId])
+  @@index([status])
 }
 
-// Banco de buddies — RH-ONB-02: avaliação >= 8.0, 12+ meses de casa, zero advertência em 6 meses, aceite voluntário
+enum MovementType {
+  ADMISSAO
+  PROMOCAO
+  TRANSFERENCIA_UNIDADE
+  TRANSFERENCIA_DEPARTAMENTO
+  MUDANCA_CARGO
+  ALTERACAO_SALARIAL
+  MUDANCA_GESTOR
+  AFASTAMENTO
+  RETORNO
+  DESLIGAMENTO
+}
+
+/// Histórico de movimentações — imutável (somente inserção). Referencia cargo, departamento e gestor
+/// por chave (a unidade deriva do departamento), preservando a história mesmo com renomeações.
+model MovementHistory {
+  id               String       @id @default(cuid())
+  employeeId       String
+  employee         Employee     @relation(fields: [employeeId], references: [id])
+  type             MovementType
+  effectiveDate    DateTime
+  fromPositionId   String?
+  fromPosition     Position?    @relation("MovementFrom", fields: [fromPositionId], references: [id])
+  toPositionId     String?
+  toPosition       Position?    @relation("MovementTo", fields: [toPositionId], references: [id])
+  fromDepartmentId String?
+  fromDepartment   Department?  @relation("MovementFromDept", fields: [fromDepartmentId], references: [id])
+  toDepartmentId   String?
+  toDepartment     Department?  @relation("MovementToDept", fields: [toDepartmentId], references: [id])
+  fromManagerId    String?
+  fromManager      Manager?     @relation("MovementFromManager", fields: [fromManagerId], references: [id])
+  toManagerId      String?
+  toManager        Manager?     @relation("MovementToManager", fields: [toManagerId], references: [id])
+  /// Valores salariais ficam em módulo próprio (Remuneração, Fase futura) com acesso mais restrito
+  reason           String?      @db.Text
+  recordedById     String
+  recordedBy       User         @relation(fields: [recordedById], references: [id])
+  createdAt        DateTime     @default(now())
+
+  @@index([employeeId, effectiveDate])
+}
+
+// ───────────────────────── RECRUTAMENTO (estrutura para a Fase 2) ─────────────────────────
+
+enum JobOpeningStatus {
+  RASCUNHO
+  AGUARDANDO_APROVACAO
+  ABERTA
+  PAUSADA
+  PREENCHIDA
+  CANCELADA
+}
+
+enum JobOpeningReason {
+  AUMENTO_QUADRO
+  SUBSTITUICAO
+  TEMPORARIA
+}
+
+model JobOpening {
+  id                  String           @id @default(cuid())
+  code                String           @unique // ex.: VAG-2026-0001
+  positionId          String
+  position            Position         @relation(fields: [positionId], references: [id])
+  departmentId        String
+  department          Department       @relation(fields: [departmentId], references: [id])
+  requestingManagerId String?
+  requestingManager   Manager?         @relation(fields: [requestingManagerId], references: [id])
+  reason              JobOpeningReason
+  headcount           Int              @default(1)
+  status              JobOpeningStatus @default(RASCUNHO)
+  contractType        ContractType     @default(CLT)
+  description         String?          @db.Text
+  requirements        String?          @db.Text
+  openedAt            DateTime?
+  closedAt            DateTime?
+  targetDate          DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  applications Application[]
+
+  @@index([status])
+  @@index([positionId])
+}
+
+enum CandidateSource {
+  INDICACAO
+  SITE
+  LINKEDIN
+  INDEED
+  AGENCIA
+  BANCO_TALENTOS
+  OUTRO
+}
+
+/// Candidato — dados pessoais mínimos; consentimento LGPD e prazo de retenção obrigatórios.
+model Candidate {
+  id              String          @id @default(cuid())
+  fullName        String
+  email           String?
+  phone           String?
+  cpfHash         String?         @unique
+  cpfEnc          String?
+  source          CandidateSource @default(OUTRO)
+  consentAt       DateTime? // aceite do aviso de privacidade
+  consentVersion  String?
+  retainUntil     DateTime? // após esta data: anonimização
+  anonymizedAt    DateTime?
+  hiredEmployeeId String?         @unique
+  hiredEmployee   Employee?       @relation(fields: [hiredEmployeeId], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  applications Application[]
+
+  @@index([email])
+}
+
+enum ApplicationStatus {
+  TRIAGEM
+  ENTREVISTA
+  AVALIACAO
+  PROPOSTA
+  APROVADO
+  REPROVADO
+  DESISTENTE
+  CONTRATADO
+}
+
+/// Candidatura: liga candidato à vaga (um candidato pode concorrer a várias vagas)
+model Application {
+  id           String            @id @default(cuid())
+  candidateId  String
+  candidate    Candidate         @relation(fields: [candidateId], references: [id])
+  jobOpeningId String
+  jobOpening   JobOpening        @relation(fields: [jobOpeningId], references: [id])
+  status       ApplicationStatus @default(TRIAGEM)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  interviews Interview[]
+
+  @@unique([candidateId, jobOpeningId])
+  @@index([jobOpeningId, status])
+}
+
+enum InterviewType {
+  TRIAGEM_RH
+  TECNICA
+  GESTOR
+  FINAL
+}
+
+enum InterviewStatus {
+  AGENDADA
+  REALIZADA
+  CANCELADA
+  NAO_COMPARECEU
+}
+
+model Interview {
+  id            String          @id @default(cuid())
+  applicationId String
+  application   Application     @relation(fields: [applicationId], references: [id])
+  type          InterviewType
+  scheduledAt   DateTime
+  durationMin   Int             @default(45)
+  location      String?
+  interviewerId String?
+  interviewer   Manager?        @relation(fields: [interviewerId], references: [id])
+  status        InterviewStatus @default(AGENDADA)
+  score         Float?
+  notes         String?         @db.Text
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([applicationId])
+  @@index([scheduledAt])
+}
+
+// ───────────────────────── NOTIFICAÇÕES / CONFIGURAÇÕES / DOCUMENTOS ─────────────────────────
+
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDENTE
+  ENVIADA
+  FALHOU
+  LIDA
+}
+
+/// Fila de notificações (outbox). O envio real de e-mail é feito por um worker/integração
+/// (fase futura). Destinatário é um usuário OU um e-mail (ex.: gestor sem login).
+model Notification {
+  id              String              @id @default(cuid())
+  channel         NotificationChannel
+  status          NotificationStatus  @default(PENDENTE)
+  recipientUserId String?
+  recipientUser   User?               @relation(fields: [recipientUserId], references: [id])
+  recipientEmail  String?
+  template        String // ex.: "auth.password_reset"
+  subject         String
+  body            String              @db.Text
+  relatedEntity   String?
+  relatedId       String?
+  scheduledFor    DateTime            @default(now())
+  sentAt          DateTime?
+  readAt          DateTime?
+  error           String?
+  createdAt       DateTime            @default(now())
+
+  @@index([status, scheduledFor])
+  @@index([recipientUserId])
+}
+
+model Setting {
+  key         String   @id // ex.: "security.session_hours"
+  value       Json
+  description String?
+  updatedById String?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id])
+  updatedAt   DateTime @updatedAt
+}
+
+enum DocumentClassification {
+  INTERNO
+  CONFIDENCIAL
+  SENSIVEL // dados pessoais sensíveis (LGPD art. 5º, II)
+}
+
+/// Metadados de documentos. O arquivo fica fora da pasta pública, cifrado (AES-256-GCM),
+/// e só é servido pela API após checagem de permissão + registro de auditoria.
+model Document {
+  id             String                 @id @default(cuid())
+  ownerType      String // "Employee" | "Candidate" | "Manager" ...
+  ownerId        String
+  category       String // ex.: "contrato", "curriculo", "aso"
+  originalName   String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  storageKey     String                 @unique
+  classification DocumentClassification @default(CONFIDENCIAL)
+  uploadedById   String
+  uploadedBy     User                   @relation(fields: [uploadedById], references: [id])
+  deletedAt      DateTime?
+  createdAt      DateTime               @default(now())
+
+  @@index([ownerType, ownerId])
+}
+
+// ───────────────────────── AUDITORIA (somente inserção) ─────────────────────────
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  APPROVE
+  REJECT
+  REOPEN
+  LOGIN
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET
+  PASSWORD_CHANGE
+  PII_ACCESS
+  DOCUMENT_UPLOAD
+  DOCUMENT_DOWNLOAD
+  PERMISSION_CHANGE
+  ACCESS_DENIED
+  EXPORT
+}
+
+model AuditLog {
+  id                 String      @id @default(cuid())
+  entityType         String
+  entityId           String?
+  action             AuditAction
+  actorId            String?
+  actor              User?       @relation("ActorUser", fields: [actorId], references: [id])
+  actorRole          Role?
+  impactedEmployeeId String?
+  impactedEmployee   Employee?   @relation("ImpactedEmployee", fields: [impactedEmployeeId], references: [id])
+  previousValue      Json?
+  newValue           Json?
+  justification      String?     @db.Text
+  ip                 String?
+  userAgent          String?
+  createdAt          DateTime    @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ───────────────────────── ONBOARDING / CARREIRA / PDI (preservados do MVP) ─────────────────────────
+
+enum StageOwner {
+  RH
+  GESTOR
+  BUDDY
+}
+
+// Pesos de promoção (RH-CAR-01): Performance 25%, Competência 20%, Comportamento 15%,
+// Aderência cultural 10%, Potencial de liderança 10%, PDI 10%, Conduta 10%. Mínimo 70/100.
+model PromotionScore {
+  id                  String   @id @default(cuid())
+  employeeId          String
+  employee            Employee @relation(fields: [employeeId], references: [id])
+  cycle               String
+  performance         Float    @default(0)
+  competency          Float    @default(0)
+  behavior            Float    @default(0)
+  culturalFit         Float    @default(0)
+  leadershipPotential Float    @default(0)
+  pdiCompletion       Float    @default(0)
+  conduct             Float    @default(0)
+  totalScore          Float    @default(0)
+  committeeRequired   Boolean  @default(false)
+  committeeMinutes    String?  @db.Text
+  decision            String?
+  createdAt           DateTime @default(now())
+
+  @@index([employeeId])
+}
+
 model BuddyEligibility {
-  id              String   @id @default(cuid())
-  employeeId      String   @unique
-  lastEvaluation  Float
-  monthsOfTenure  Int
+  id               String    @id @default(cuid())
+  employeeId       String    @unique
+  lastEvaluation   Float
+  monthsOfTenure   Int
   disciplinaryFree Boolean
-  voluntaryOptIn  Boolean
-  approved        Boolean  @default(false)
-  approvedAt      DateTime?
+  voluntaryOptIn   Boolean
+  approved         Boolean   @default(false)
+  approvedAt       DateTime?
 }
 
 // ───────────────────────── TEMPLATES (oficiais, somente RH/ADMIN editam) ─────────────────────────
@@ -236,28 +652,28 @@ enum OnboardingPeriod {
 }
 
 model OnboardingTemplate {
-  id          String     @id @default(cuid())
-  name        String
-  positionId  String?
-  position    Position?  @relation(fields: [positionId], references: [id])
-  active      Boolean    @default(true)
-  version     String     @default("v01/2026")
-  createdAt   DateTime   @default(now())
+  id         String    @id @default(cuid())
+  name       String
+  positionId String?
+  position   Position? @relation(fields: [positionId], references: [id])
+  active     Boolean   @default(true)
+  version    String    @default("v01/2026")
+  createdAt  DateTime  @default(now())
 
-  stages      OnboardingStageTemplate[]
-  processes   OnboardingProcess[]
+  stages    OnboardingStageTemplate[]
+  processes OnboardingProcess[]
 }
 
 model OnboardingStageTemplate {
   // As 8 etapas operacionais do RH-ONB-02
-  id            String              @id @default(cuid())
+  id            String             @id @default(cuid())
   templateId    String
-  template      OnboardingTemplate  @relation(fields: [templateId], references: [id])
+  template      OnboardingTemplate @relation(fields: [templateId], references: [id])
   period        OnboardingPeriod
-  name          String              // ex.: "Etapa 2 — Imersão"
-  dayRangeStart Int                 // dia relativo à admissão (pode ser negativo para pré-admissão)
+  name          String // ex.: "Etapa 2 — Imersão"
+  dayRangeStart Int // dia relativo à admissão (pode ser negativo para pré-admissão)
   dayRangeEnd   Int
-  ownerRole     Role                // dono padrão da etapa (RH, Gestor, Buddy mapeado para GESTOR/RH)
+  owner         StageOwner // dono padrão da etapa
   order         Int
 
   checklistItemTemplates ChecklistItemTemplate[]
@@ -279,7 +695,7 @@ model ChecklistItemTemplate {
   title           String
   description     String?                 @db.Text
   type            ChecklistItemType
-  dueDayOffset    Int                     // dias após admissão
+  dueDayOffset    Int // dias após admissão
   order           Int
 }
 
@@ -293,16 +709,16 @@ enum OnboardingStatus {
 }
 
 model OnboardingProcess {
-  id          String           @id @default(cuid())
-  employeeId  String
-  employee    Employee         @relation(fields: [employeeId], references: [id])
-  templateId  String
-  template    OnboardingTemplate @relation(fields: [templateId], references: [id])
-  startDate   DateTime
-  status      OnboardingStatus @default(ATIVO)
-  extendedUntil DateTime?      // período estendido de experiência (+30 dias, RH-SOP-01 Script 02)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id            String             @id @default(cuid())
+  employeeId    String
+  employee      Employee           @relation(fields: [employeeId], references: [id])
+  templateId    String
+  template      OnboardingTemplate @relation(fields: [templateId], references: [id])
+  startDate     DateTime
+  status        OnboardingStatus   @default(ATIVO)
+  extendedUntil DateTime? // período estendido de experiência (+30 dias, RH-SOP-01 Script 02)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   stages      OnboardingStage[]
   evaluations Evaluation[]
@@ -320,20 +736,20 @@ enum StageStatus {
 }
 
 model OnboardingStage {
-  id              String            @id @default(cuid())
-  processId       String
-  process         OnboardingProcess @relation(fields: [processId], references: [id])
-  name            String
-  period          OnboardingPeriod
-  dueDate         DateTime?
-  completedDate   DateTime?
-  status          StageStatus       @default(PENDENTE)
-  responsibleId   String?
-  responsible     Employee?         @relation(fields: [responsibleId], references: [id])
-  reopenedReason  String?           @db.Text
-  order           Int
+  id             String            @id @default(cuid())
+  processId      String
+  process        OnboardingProcess @relation(fields: [processId], references: [id])
+  name           String
+  period         OnboardingPeriod
+  dueDate        DateTime?
+  completedDate  DateTime?
+  status         StageStatus       @default(PENDENTE)
+  responsibleId  String?
+  responsible    Employee?         @relation(fields: [responsibleId], references: [id])
+  reopenedReason String?           @db.Text
+  order          Int
 
-  checklistItems  ChecklistItem[]
+  checklistItems ChecklistItem[]
 
   @@index([processId])
 }
@@ -363,32 +779,32 @@ enum Priority {
 }
 
 model ChecklistItem {
-  id              String           @id @default(cuid())
-  title           String
-  description     String?          @db.Text
-  type            ChecklistItemType
-  origin          ChecklistOrigin
-  employeeId      String
-  employee        Employee         @relation(fields: [employeeId], references: [id])
+  id                String            @id @default(cuid())
+  title             String
+  description       String?           @db.Text
+  type              ChecklistItemType
+  origin            ChecklistOrigin
+  employeeId        String
+  employee          Employee          @relation(fields: [employeeId], references: [id])
   onboardingStageId String?
-  onboardingStage OnboardingStage? @relation(fields: [onboardingStageId], references: [id])
-  pdiId           String?
-  pdi             PDI?             @relation(fields: [pdiId], references: [id])
-  responsibleId   String?
-  responsible     Employee?        @relation("ChecklistResponsible", fields: [responsibleId], references: [id])
-  dueDate         DateTime?
-  completedDate   DateTime?
-  status          ChecklistStatus  @default(PENDENTE)
-  priority        Priority         @default(MEDIA)
-  observation     String?          @db.Text
-  justification   String?          @db.Text
-  evidenceUrl     String?
-  completedById   String?
-  completedBy     Employee?        @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
-  validatedById   String?
-  validatedBy     Employee?        @relation("ChecklistValidatedBy", fields: [validatedById], references: [id])
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  onboardingStage   OnboardingStage?  @relation(fields: [onboardingStageId], references: [id])
+  pdiId             String?
+  pdi               PDI?              @relation(fields: [pdiId], references: [id])
+  responsibleId     String?
+  responsible       Employee?         @relation("ChecklistResponsible", fields: [responsibleId], references: [id])
+  dueDate           DateTime?
+  completedDate     DateTime?
+  status            ChecklistStatus   @default(PENDENTE)
+  priority          Priority          @default(MEDIA)
+  observation       String?           @db.Text
+  justification     String?           @db.Text
+  evidenceUrl       String?
+  completedById     String?
+  completedBy       Employee?         @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
+  validatedById     String?
+  validatedBy       Employee?         @relation("ChecklistValidatedBy", fields: [validatedById], references: [id])
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@index([employeeId])
   @@index([status])
@@ -405,38 +821,38 @@ enum EvaluationMilestone {
 
 // Pesos fixos D45/D90 conforme RH-ONB-01: Metas 35%, Domínio técnico 25%, POPs 20%, Presença/conduta 15%, Integração 5%
 model Evaluation {
-  id              String              @id @default(cuid())
-  processId       String?
-  process         OnboardingProcess?  @relation(fields: [processId], references: [id])
-  employeeId      String
-  milestone       EvaluationMilestone
-  goalsScore      Float?   // 35%
-  technicalScore  Float?   // 25%
-  popsScore       Float?   // 20%
-  attendanceScore Float?   // 15%
-  teamworkScore   Float?   // 5%
-  finalScore      Float?
-  belowAlertThreshold Boolean @default(false) // nota < 5,5 dispara alerta (RH-ONB-02)
-  evaluatorId     String
-  evaluator       Employee @relation(fields: [evaluatorId], references: [id])
-  outcome         String?  // aprovado / aprovado com PDI / extensão / encerramento
-  notes           String?  @db.Text
-  createdAt       DateTime @default(now())
+  id                  String              @id @default(cuid())
+  processId           String?
+  process             OnboardingProcess?  @relation(fields: [processId], references: [id])
+  employeeId          String
+  milestone           EvaluationMilestone
+  goalsScore          Float? // 35%
+  technicalScore      Float? // 25%
+  popsScore           Float? // 20%
+  attendanceScore     Float? // 15%
+  teamworkScore       Float? // 5%
+  finalScore          Float?
+  belowAlertThreshold Boolean             @default(false) // nota < 5,5 dispara alerta (RH-ONB-02)
+  evaluatorId         String
+  evaluator           Employee            @relation(fields: [evaluatorId], references: [id])
+  outcome             String? // aprovado / aprovado com PDI / extensão / encerramento
+  notes               String?             @db.Text
+  createdAt           DateTime            @default(now())
 
   @@index([employeeId])
 }
 
 // Pesquisa de bem-estar (Dias 7/15/30/45) — RH-ONB-02
 model WellbeingCheck {
-  id          String   @id @default(cuid())
-  employeeId  String
-  dayOffset   Int      // 7, 15, 30, 45
-  q1Support   Int?     // 1-5
-  q2Clarity   Int?     // 1-5
-  q3Future    String?  // Sim / Não sei / Não
-  alertTriggered Boolean @default(false)
+  id              String    @id @default(cuid())
+  employeeId      String
+  dayOffset       Int // 7, 15, 30, 45
+  q1Support       Int? // 1-5
+  q2Clarity       Int? // 1-5
+  q3Future        String? // Sim / Não sei / Não
+  alertTriggered  Boolean   @default(false)
   alertResolvedAt DateTime?
-  createdAt   DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([employeeId])
 }
@@ -461,29 +877,29 @@ enum PDIStatus {
 }
 
 model PDI {
-  id               String     @id @default(cuid())
-  employeeId       String
-  employee         Employee   @relation(fields: [employeeId], references: [id])
+  id                  String             @id @default(cuid())
+  employeeId          String
+  employee            Employee           @relation(fields: [employeeId], references: [id])
   onboardingProcessId String?
-  onboardingProcess OnboardingProcess? @relation(fields: [onboardingProcessId], references: [id])
-  origin           PDIOrigin
-  gapDescription   String     @db.Text
-  developmentGoal  String     @db.Text
-  recommendedAction String    @db.Text
-  executorId       String?    // responsável pela execução
-  executor         Employee?  @relation("PDIExecutor", fields: [executorId], references: [id])
-  monitorId        String?    // responsável pelo acompanhamento
-  monitor          Employee?  @relation("PDIMonitor", fields: [monitorId], references: [id])
-  dueDate          DateTime?
-  status           PDIStatus  @default(ABERTO)
-  evidenceUrl      String?
-  checkpointNotes  String?    @db.Text
-  finalOpinion     String?    @db.Text
-  completionPct    Float      @default(0)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  onboardingProcess   OnboardingProcess? @relation(fields: [onboardingProcessId], references: [id])
+  origin              PDIOrigin
+  gapDescription      String             @db.Text
+  developmentGoal     String             @db.Text
+  recommendedAction   String             @db.Text
+  executorId          String? // responsável pela execução
+  executor            Employee?          @relation("PDIExecutor", fields: [executorId], references: [id])
+  monitorId           String? // responsável pelo acompanhamento
+  monitor             Employee?          @relation("PDIMonitor", fields: [monitorId], references: [id])
+  dueDate             DateTime?
+  status              PDIStatus          @default(ABERTO)
+  evidenceUrl         String?
+  checkpointNotes     String?            @db.Text
+  finalOpinion        String?            @db.Text
+  completionPct       Float              @default(0)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
 
-  checklistItems   ChecklistItem[]
+  checklistItems ChecklistItem[]
 
   @@index([employeeId])
 }
@@ -509,59 +925,23 @@ enum PDLStatus {
 // Critérios de entrada RH-PDL-01: avaliação >= 8.0 (2 ciclos), 18+ meses de casa,
 // zero advertências em 12 meses, PDI >= 80% conclusão, indicação do gestor, aceite voluntário
 model PDLCandidacy {
-  id                String    @id @default(cuid())
-  employeeId        String
-  employee          Employee  @relation(fields: [employeeId], references: [id])
-  targetPositionId  String?
-  targetPosition    Position? @relation(fields: [targetPositionId], references: [id])
-  stage             PDLStage  @default(DIAGNOSTICO)
-  status            PDLStatus @default(CANDIDATO)
-  evaluationLast2Cycles Float?
-  tenureMonths      Int?
-  disciplinaryFree12m Boolean?
+  id                     String    @id @default(cuid())
+  employeeId             String
+  employee               Employee  @relation(fields: [employeeId], references: [id])
+  targetPositionId       String?
+  targetPosition         Position? @relation(fields: [targetPositionId], references: [id])
+  stage                  PDLStage  @default(DIAGNOSTICO)
+  status                 PDLStatus @default(CANDIDATO)
+  evaluationLast2Cycles  Float?
+  tenureMonths           Int?
+  disciplinaryFree12m    Boolean?
   pdiCompletionLastCycle Float?
-  managerJustification String? @db.Text
-  voluntaryOptIn    Boolean   @default(false)
-  evaluation360Score Float?
-  committeeDecision String?   @db.Text
-  startedAt         DateTime  @default(now())
-  finishedAt        DateTime?
+  managerJustification   String?   @db.Text
+  voluntaryOptIn         Boolean   @default(false)
+  evaluation360Score     Float?
+  committeeDecision      String?   @db.Text
+  startedAt              DateTime  @default(now())
+  finishedAt             DateTime?
 
   @@index([employeeId])
-}
-
-// ───────────────────────── AUDITORIA / HISTÓRICO (imutável) ─────────────────────────
-
-enum AuditAction {
-  CREATE
-  UPDATE
-  DELETE
-  STATUS_CHANGE
-  APPROVE
-  REJECT
-  REOPEN
-  LOGIN
-  EXPORT
-}
-
-model AuditLog {
-  id              String      @id @default(cuid())
-  entityType      String      // ex.: "OnboardingProcess", "ChecklistItem", "PDI"
-  entityId        String
-  action          AuditAction
-  actorId         String
-  actor           User        @relation("ActorUser", fields: [actorId], references: [id])
-  actorRole       Role
-  impactedEmployeeId String?
-  impactedEmployee Employee?  @relation("ImpactedEmployee", fields: [impactedEmployeeId], references: [id])
-  previousValue   Json?
-  newValue        Json?
-  justification   String?     @db.Text
-  notes           String?     @db.Text
-  createdAt       DateTime    @default(now())
-
-  @@index([entityType, entityId])
-  @@index([actorId])
-  @@index([impactedEmployeeId])
-  @@index([createdAt])
 }

@@ -1,445 +1,216 @@
-import { PrismaClient, Role, CareerLevel, OnboardingPeriod, ChecklistItemType, EmployeeStatus, ChecklistOrigin, ChecklistStatus, PDIOrigin, PDIStatus } from "@prisma/client";
-import bcrypt from "bcryptjs";
+/**
+ * Seed da Fase 1 — idempotente (pode rodar várias vezes).
+ * Carrega: catálogo de permissões, 3 unidades, departamentos, catálogo de cargos,
+ * trilhas de carreira (RH-CAR-01), template de onboarding (RH-ONB-02),
+ * gestores com hierarquia, usuários de teste e configurações padrão.
+ */
+import { PrismaClient, CareerLevel, OnboardingPeriod, ChecklistItemType, StageOwner, type Role } from "@prisma/client";
+import { PERMISSION_CATALOG } from "../src/lib/permissions";
+import { protectCpf, cpfHash } from "../src/lib/cpf";
+import { hashPassword } from "../src/lib/password";
 
 const prisma = new PrismaClient();
 
-async function main() {
-  // ── Unidades (RH-ONB-01 / RH-ONB-02) ──
-  const [brisaBarra, imperial, vilamar] = await Promise.all(
-    [
-      { name: "Brisa Barra", code: "BRISA" },
-      { name: "Imperial", code: "IMPERIAL" },
-      { name: "Vilamar", code: "VILAMAR" },
-    ].map((u) => prisma.unit.upsert({ where: { code: u.code }, update: {}, create: u }))
-  );
+/** Gera um CPF válido a partir de 9 dígitos base (apenas para dados de teste). */
+function testCpf(base9: string): string {
+  const d = base9.split("").map(Number);
+  for (const len of [9, 10]) {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += d[i] * (len + 1 - i);
+    const r = (sum * 10) % 11;
+    d.push(r === 10 ? 0 : r);
+  }
+  return d.join("");
+}
 
-  // ── Departamentos por unidade (recorte: Brisa Barra como piloto) ──
-  const deptNames = ["Recepção", "Governança", "Cozinha", "Salão", "Reservas", "Manutenção", "RH"];
-  const depts = await Promise.all(
-    deptNames.map((name) =>
-      prisma.department.upsert({
-        where: { unitId_name: { unitId: brisaBarra.id, name } },
+export const SEED_PASSWORD = "Riale@2026Seguro";
+
+export const TEST_USERS: Array<{ key: string; name: string; email: string; cpfBase: string; role: Role; unit?: string; manager?: string }> = [
+  { key: "admin", name: "Administrador do Sistema", email: "admin@rialehoteis.com.br", cpfBase: "529982247", role: "ADMIN" },
+  { key: "rhcorp", name: "Carla Mendes", email: "rh@rialehoteis.com.br", cpfBase: "111444777", role: "RH" },
+  { key: "rhbrisa", name: "Paulo Henrique Lima", email: "rh.brisabarra@rialehoteis.com.br", cpfBase: "390533447", role: "RH", unit: "BRISA" },
+  { key: "gestor", name: "Marina Souza", email: "marina.souza@rialehoteis.com.br", cpfBase: "168995350", role: "GESTOR", manager: "marina" },
+];
+
+async function main() {
+  // ── Permissões (catálogo + concessões padrão) ──
+  for (const [code, def] of Object.entries(PERMISSION_CATALOG)) {
+    const p = await prisma.permission.upsert({
+      where: { code },
+      update: { module: def.module, description: def.description },
+      create: { code, module: def.module, description: def.description },
+    });
+    for (const role of def.defaults) {
+      await prisma.rolePermission.upsert({ where: { role_permissionId: { role, permissionId: p.id } }, update: {}, create: { role, permissionId: p.id } });
+    }
+  }
+
+  // ── Unidades ──
+  const unitsDef = [
+    { name: "Brisa Barra", code: "BRISA", city: "Rio de Janeiro", state: "RJ" },
+    { name: "Imperial", code: "IMPERIAL", city: "Rio de Janeiro", state: "RJ" },
+    { name: "Vilamar", code: "VILAMAR", city: "Rio de Janeiro", state: "RJ" },
+  ];
+  const units: Record<string, { id: string }> = {};
+  for (const u of unitsDef) units[u.code] = await prisma.unit.upsert({ where: { code: u.code }, update: {}, create: u });
+
+  // ── Departamentos (mesma estrutura nas três unidades) ──
+  const deptNames: Array<[string, string]> = [
+    ["Diretoria", "DIR"], ["Recursos Humanos", "RH"], ["Recepção", "REC"], ["Governança", "GOV"],
+    ["A&B — Cozinha", "COZ"], ["A&B — Salão", "SAL"], ["Reservas e Comercial", "COM"],
+    ["Manutenção", "MAN"], ["Controladoria", "CTL"],
+  ];
+  const dept: Record<string, Record<string, { id: string }>> = {};
+  for (const [code, unit] of Object.entries(units)) {
+    dept[code] = {};
+    for (const [name, dcode] of deptNames) {
+      dept[code][dcode] = await prisma.department.upsert({
+        where: { unitId_name: { unitId: unit.id, name } },
         update: {},
-        create: { name, unitId: brisaBarra.id },
-      })
-    )
-  );
-  const deptByName = Object.fromEntries(depts.map((d) => [d.name, d]));
+        create: { name, code: dcode, unitId: unit.id },
+      });
+    }
+  }
 
   // ── Trilhas de carreira (RH-CAR-01) ──
-  const trackRecepcao = await prisma.careerTrack.upsert({
-    where: { name: "Recepção e Portaria" },
-    update: {},
-    create: { name: "Recepção e Portaria" },
-  });
-  const trackGovernanca = await prisma.careerTrack.upsert({
-    where: { name: "Governança e Hospedagem" },
-    update: {},
-    create: { name: "Governança e Hospedagem" },
-  });
+  const tracksDef: Array<{ name: string; stages: Array<[CareerLevel, string, string]> }> = [
+    {
+      name: "Recepção e Portaria",
+      stages: [
+        [CareerLevel.N1, "6-12 meses", "Zero queixas formais de hóspede; controle de garagem sem divergência; dominar roteiros de apresentação do hotel"],
+        [CareerLevel.N2, "12-24 meses", "Check-in e check-out autônomos em 100% dos casos; Totvs sem erro de tarifa; upselling em >= 30% dos check-ins"],
+      ],
+    },
+    {
+      name: "Governança e Hospedagem",
+      stages: [
+        [CareerLevel.N1, "6-12 meses", "Executar roteiro de limpeza de áreas comuns com conformidade >= 90%; acionar supervisor diante de não conformidade"],
+        [CareerLevel.N2, "12-24 meses", "Arrumar UHs aprovadas na inspeção sem refazer; minibar sem divergência em 100% das UHs"],
+      ],
+    },
+    { name: "A&B — Cozinha", stages: [] },
+    { name: "A&B — Salão", stages: [] },
+    { name: "Reservas, Comercial e Eventos", stages: [] },
+    { name: "Manutenção", stages: [] },
+    { name: "RH, Controladoria e Marketing", stages: [] },
+  ];
+  const tracks: Record<string, { id: string }> = {};
+  for (const t of tracksDef) {
+    tracks[t.name] = await prisma.careerTrack.upsert({ where: { name: t.name }, update: {}, create: { name: t.name } });
+    for (const [i, [level, months, criteria]] of t.stages.entries()) {
+      await prisma.careerStage.upsert({
+        where: { careerTrackId_level: { careerTrackId: tracks[t.name].id, level } },
+        update: {},
+        create: { careerTrackId: tracks[t.name].id, level, typicalMonths: months, masteryCriteria: criteria, order: i + 1 },
+      });
+    }
+  }
 
-  await prisma.careerStage.upsert({
-    where: { careerTrackId_level: { careerTrackId: trackRecepcao.id, level: CareerLevel.N1 } },
-    update: {},
-    create: {
-      careerTrackId: trackRecepcao.id,
-      level: CareerLevel.N1,
-      typicalMonths: "6-12 meses",
-      masteryCriteria:
-        "Zero queixas formais de hóspede; controle de garagem sem divergência; dominar roteiros de apresentação do hotel",
-      order: 1,
-    },
-  });
-  await prisma.careerStage.upsert({
-    where: { careerTrackId_level: { careerTrackId: trackRecepcao.id, level: CareerLevel.N2 } },
-    update: {},
-    create: {
-      careerTrackId: trackRecepcao.id,
-      level: CareerLevel.N2,
-      typicalMonths: "12-24 meses",
-      masteryCriteria:
-        "Check-in e check-out autônomos em 100% dos casos; Totvs sem erro de tarifa; upselling em >= 30% dos check-ins",
-      order: 2,
-    },
-  });
-  await prisma.careerStage.upsert({
-    where: { careerTrackId_level: { careerTrackId: trackGovernanca.id, level: CareerLevel.N1 } },
-    update: {},
-    create: {
-      careerTrackId: trackGovernanca.id,
-      level: CareerLevel.N1,
-      typicalMonths: "6-12 meses",
-      masteryCriteria:
-        "Executar roteiro de limpeza de áreas comuns com conformidade >= 90%; acionar supervisor diante de não conformidade",
-      order: 1,
-    },
-  });
-  await prisma.careerStage.upsert({
-    where: { careerTrackId_level: { careerTrackId: trackGovernanca.id, level: CareerLevel.N2 } },
-    update: {},
-    create: {
-      careerTrackId: trackGovernanca.id,
-      level: CareerLevel.N2,
-      typicalMonths: "12-24 meses",
-      masteryCriteria:
-        "Arrumar UHs aprovadas na inspeção sem refazer; minibar sem divergência em 100% das UHs",
-      order: 2,
-    },
-  });
+  // ── Catálogo corporativo de cargos ──
+  const positionsDef: Array<{ key: string; title: string; level: CareerLevel; track?: string; leadership?: boolean }> = [
+    { key: "dir", title: "Gerente Geral", level: CareerLevel.N7, leadership: true },
+    { key: "recep", title: "Recepcionista", level: CareerLevel.N2, track: "Recepção e Portaria" },
+    { key: "suprec", title: "Supervisor de Recepção", level: CareerLevel.N5, track: "Recepção e Portaria", leadership: true },
+    { key: "camar", title: "Camareira", level: CareerLevel.N2, track: "Governança e Hospedagem" },
+    { key: "govern", title: "Governanta", level: CareerLevel.N5, track: "Governança e Hospedagem", leadership: true },
+    { key: "chef", title: "Chef de Cozinha", level: CareerLevel.N6, track: "A&B — Cozinha", leadership: true },
+    { key: "maitre", title: "Maître", level: CareerLevel.N5, track: "A&B — Salão", leadership: true },
+    { key: "gercom", title: "Gerente Comercial", level: CareerLevel.N6, track: "Reservas, Comercial e Eventos", leadership: true },
+    { key: "supman", title: "Supervisor de Manutenção", level: CareerLevel.N5, track: "Manutenção", leadership: true },
+    { key: "analrh", title: "Analista de RH", level: CareerLevel.N3, track: "RH, Controladoria e Marketing" },
+    { key: "coordrh", title: "Coordenador de RH", level: CareerLevel.N5, track: "RH, Controladoria e Marketing", leadership: true },
+  ];
+  const pos: Record<string, { id: string }> = {};
+  for (const p of positionsDef) {
+    pos[p.key] = await prisma.position.upsert({
+      where: { title: p.title },
+      update: {},
+      create: { title: p.title, level: p.level, isLeadership: !!p.leadership, careerTrackId: p.track ? tracks[p.track].id : null },
+    });
+  }
 
-  // ── Cargos ──
-  const posRecepcionista = await prisma.position.upsert({
-    where: { id: "pos-recepcionista" },
-    update: {},
-    create: {
-      id: "pos-recepcionista",
-      title: "Recepcionista",
-      level: CareerLevel.N2,
-      departmentId: deptByName["Recepção"].id,
-      careerTrackId: trackRecepcao.id,
-    },
-  });
-  const posGestorRecepcao = await prisma.position.upsert({
-    where: { id: "pos-gestor-recepcao" },
-    update: {},
-    create: {
-      id: "pos-gestor-recepcao",
-      title: "Supervisor de Recepção",
-      level: CareerLevel.N5,
-      departmentId: deptByName["Recepção"].id,
-      careerTrackId: trackRecepcao.id,
-    },
-  });
-  const posCamareira = await prisma.position.upsert({
-    where: { id: "pos-camareira" },
-    update: {},
-    create: {
-      id: "pos-camareira",
-      title: "Aux./Assist. de Governança",
-      level: CareerLevel.N2,
-      departmentId: deptByName["Governança"].id,
-      careerTrackId: trackGovernanca.id,
-    },
-  });
-  const posRH = await prisma.position.upsert({
-    where: { id: "pos-rh-generalista" },
-    update: {},
-    create: {
-      id: "pos-rh-generalista",
-      title: "Analista de RH",
-      level: CareerLevel.N3,
-      departmentId: deptByName["RH"].id,
-    },
-  });
+  // ── Gestores (com superior direto) ──
+  const managersDef: Array<{ key: string; name: string; email: string; cpfBase?: string; internalId?: string; pos: string; unit: string; dept: string; superior?: string }> = [
+    { key: "gg_brisa", name: "Ricardo Albuquerque", email: "ricardo.albuquerque@rialehoteis.com.br", internalId: "BR-0001", pos: "dir", unit: "BRISA", dept: "DIR" },
+    { key: "marina", name: "Marina Souza", email: "marina.souza@rialehoteis.com.br", cpfBase: "168995350", internalId: "BR-0102", pos: "suprec", unit: "BRISA", dept: "REC", superior: "gg_brisa" },
+    { key: "joao", name: "João Batista Rocha", email: "joao.rocha@rialehoteis.com.br", internalId: "BR-0108", pos: "suprec", unit: "BRISA", dept: "REC", superior: "gg_brisa" },
+    { key: "lucia", name: "Lúcia Ferreira", email: "lucia.ferreira@rialehoteis.com.br", internalId: "BR-0120", pos: "govern", unit: "BRISA", dept: "GOV", superior: "gg_brisa" },
+    { key: "gg_imp", name: "Fernanda Castro", email: "fernanda.castro@rialehoteis.com.br", internalId: "IM-0001", pos: "dir", unit: "IMPERIAL", dept: "DIR" },
+    { key: "chef_imp", name: "André Moura", email: "andre.moura@rialehoteis.com.br", internalId: "IM-0230", pos: "chef", unit: "IMPERIAL", dept: "COZ", superior: "gg_imp" },
+    { key: "gg_vila", name: "Roberto Nogueira", email: "roberto.nogueira@rialehoteis.com.br", internalId: "VL-0001", pos: "dir", unit: "VILAMAR", dept: "DIR" },
+  ];
+  const mgr: Record<string, { id: string }> = {};
+  for (const m of managersDef) {
+    mgr[m.key] = await prisma.manager.upsert({
+      where: { email: m.email },
+      update: {},
+      create: {
+        name: m.name,
+        email: m.email,
+        internalId: m.internalId,
+        ...(m.cpfBase ? protectCpf(testCpf(m.cpfBase)) : {}),
+        positionId: pos[m.pos].id,
+        departmentId: dept[m.unit][m.dept].id,
+        directSuperiorId: m.superior ? mgr[m.superior].id : null,
+      },
+    });
+  }
 
-  // ── Template de onboarding — As 8 etapas operacionais (RH-ONB-02) ──
+  // ── Usuários de teste ──
+  const passwordHash = await hashPassword(SEED_PASSWORD);
+  for (const u of TEST_USERS) {
+    const cpf = testCpf(u.cpfBase);
+    const existing = await prisma.user.findUnique({ where: { cpfHash: cpfHash(cpf) } });
+    const user =
+      existing ??
+      (await prisma.user.create({
+        data: {
+          name: u.name,
+          email: u.email,
+          ...protectCpf(cpf),
+          role: u.role,
+          unitId: u.unit ? units[u.unit].id : u.manager ? units.BRISA.id : null,
+          passwordHash,
+          passwordChangedAt: new Date(0),
+        },
+      }));
+    if (u.manager) await prisma.manager.update({ where: { id: mgr[u.manager].id }, data: { userId: user.id } });
+  }
+
+  // ── Template de onboarding — 8 etapas (RH-ONB-02), preservado do MVP ──
   const template = await prisma.onboardingTemplate.upsert({
     where: { id: "tpl-onboarding-padrao" },
     update: {},
-    create: { id: "tpl-onboarding-padrao", name: "Onboarding 90 dias — Rede Riale" },
+    create: { id: "tpl-onboarding-padrao", name: "Onboarding 90 dias — Riale Hotéis" },
   });
-
-  const stageDefs: Array<{
-    name: string;
-    period: OnboardingPeriod;
-    start: number;
-    end: number;
-    owner: Role;
-    items: Array<{ title: string; type: ChecklistItemType; offset: number }>;
-  }> = [
-    {
-      name: "Etapa 1 — Pré-admissão",
-      period: OnboardingPeriod.PERIODO_1,
-      start: -7,
-      end: -1,
-      owner: Role.RH_UNIDADE,
-      items: [
-        { title: "Mensagem de boas-vindas + acesso ao app Sólides", type: ChecklistItemType.TASK, offset: -5 },
-        { title: "Termo de Ciência de Políticas enviado para leitura prévia", type: ChecklistItemType.DOCUMENT_SIGNATURE, offset: -3 },
-      ],
-    },
-    {
-      name: "Etapa 2 — Imersão",
-      period: OnboardingPeriod.PERIODO_1,
-      start: 1,
-      end: 2,
-      owner: Role.GESTOR,
-      items: [
-        { title: "Termo de Ciência de Políticas assinado digitalmente", type: ChecklistItemType.DOCUMENT_SIGNATURE, offset: 1 },
-        { title: "Tour completo + apresentação da equipe, gestor e buddy", type: ChecklistItemType.TASK, offset: 1 },
-        { title: "Termo de Metas (Dias 3-45) assinado", type: ChecklistItemType.DOCUMENT_SIGNATURE, offset: 2 },
-        { title: "Plano de carreira apresentado e registrado no PDI", type: ChecklistItemType.MEETING, offset: 2 },
-      ],
-    },
-    {
-      name: "Etapa 3 — Aprendizado guiado",
-      period: OnboardingPeriod.PERIODO_1,
-      start: 3,
-      end: 15,
-      owner: Role.GESTOR,
-      items: [
-        { title: "Buddy demonstra os POPs do cargo (3x cada)", type: ChecklistItemType.TRAINING, offset: 9 },
-        { title: "Primeira entrega real do cargo sem ajuda direta", type: ChecklistItemType.TASK, offset: 12 },
-        { title: "Check de bem-estar — Dia 15", type: ChecklistItemType.SURVEY, offset: 15 },
-      ],
-    },
-    {
-      name: "Etapa 4 — Autonomia progressiva",
-      period: OnboardingPeriod.PERIODO_1,
-      start: 16,
-      end: 30,
-      owner: Role.GESTOR,
-      items: [
-        { title: "Conversa de progresso — Dia 21", type: ChecklistItemType.MEETING, offset: 21 },
-        { title: "Check-in tripartite (colaborador, gestor, RH) — Dia 30", type: ChecklistItemType.MEETING, offset: 30 },
-      ],
-    },
-    {
-      name: "Etapa 5 — Consolidação",
-      period: OnboardingPeriod.PERIODO_1,
-      start: 31,
-      end: 45,
-      owner: Role.GESTOR,
-      items: [
-        { title: "Pré-avaliação — Dia 35", type: ChecklistItemType.MEETING, offset: 35 },
-        { title: "Autoavaliação — Dia 40", type: ChecklistItemType.EVALUATION, offset: 40 },
-        { title: "Avaliação formal D45 + devolutiva", type: ChecklistItemType.EVALUATION, offset: 45 },
-      ],
-    },
-    {
-      name: "Etapa 6 — PDI e transição",
-      period: OnboardingPeriod.PERIODO_1,
-      start: 46,
-      end: 50,
-      owner: Role.RH_UNIDADE,
-      items: [
-        { title: "PDI entregue com metas dos próximos 45 dias", type: ChecklistItemType.TASK, offset: 48 },
-        { title: "Conversa de mudança de fase (Dia 50)", type: ChecklistItemType.MEETING, offset: 50 },
-      ],
-    },
-    {
-      name: "Etapa 7 — Performance",
-      period: OnboardingPeriod.PERIODO_2,
-      start: 51,
-      end: 90,
-      owner: Role.GESTOR,
-      items: [
-        { title: "Meio de caminho — Dia 60", type: ChecklistItemType.MEETING, offset: 60 },
-        { title: "Preparação para avaliação final — Dia 80", type: ChecklistItemType.MEETING, offset: 80 },
-        { title: "Autoavaliação final — Dia 83", type: ChecklistItemType.EVALUATION, offset: 83 },
-      ],
-    },
-    {
-      name: "Etapa 8 — Decisão",
-      period: OnboardingPeriod.PERIODO_2,
-      start: 90,
-      end: 95,
-      owner: Role.RH_UNIDADE,
-      items: [
-        { title: "Avaliação final D90 e decisão de efetivação", type: ChecklistItemType.EVALUATION, offset: 90 },
-      ],
-    },
+  const stageDefs: Array<{ name: string; period: OnboardingPeriod; start: number; end: number; owner: StageOwner; items: Array<[string, ChecklistItemType, number]> }> = [
+    { name: "Etapa 1 — Pré-admissão", period: "PERIODO_1", start: -7, end: -1, owner: "RH", items: [["Mensagem de boas-vindas + acesso ao app Sólides", "TASK", -5], ["Termo de Ciência de Políticas enviado para leitura prévia", "DOCUMENT_SIGNATURE", -3]] },
+    { name: "Etapa 2 — Imersão", period: "PERIODO_1", start: 1, end: 2, owner: "GESTOR", items: [["Termo de Ciência de Políticas assinado digitalmente", "DOCUMENT_SIGNATURE", 1], ["Tour completo + apresentação da equipe, gestor e buddy", "TASK", 1], ["Termo de Metas (Dias 3-45) assinado", "DOCUMENT_SIGNATURE", 2], ["Plano de carreira apresentado e registrado no PDI", "MEETING", 2]] },
+    { name: "Etapa 3 — Aprendizado guiado", period: "PERIODO_1", start: 3, end: 15, owner: "BUDDY", items: [["Buddy demonstra os POPs do cargo (3x cada)", "TRAINING", 9], ["Primeira entrega real do cargo sem ajuda direta", "TASK", 12], ["Check de bem-estar — Dia 15", "SURVEY", 15]] },
+    { name: "Etapa 4 — Autonomia progressiva", period: "PERIODO_1", start: 16, end: 30, owner: "GESTOR", items: [["Conversa de progresso — Dia 21", "MEETING", 21], ["Check-in tripartite (colaborador, gestor, RH) — Dia 30", "MEETING", 30]] },
+    { name: "Etapa 5 — Consolidação", period: "PERIODO_1", start: 31, end: 45, owner: "GESTOR", items: [["Pré-avaliação — Dia 35", "MEETING", 35], ["Autoavaliação — Dia 40", "EVALUATION", 40], ["Avaliação formal D45 + devolutiva", "EVALUATION", 45]] },
+    { name: "Etapa 6 — PDI e transição", period: "PERIODO_1", start: 46, end: 50, owner: "RH", items: [["PDI entregue com metas dos próximos 45 dias", "TASK", 48], ["Conversa de mudança de fase (Dia 50)", "MEETING", 50]] },
+    { name: "Etapa 7 — Performance", period: "PERIODO_2", start: 51, end: 90, owner: "GESTOR", items: [["Meio de caminho — Dia 60", "MEETING", 60], ["Preparação para avaliação final — Dia 80", "MEETING", 80], ["Autoavaliação final — Dia 83", "EVALUATION", 83]] },
+    { name: "Etapa 8 — Decisão", period: "PERIODO_2", start: 90, end: 95, owner: "RH", items: [["Avaliação final D90 e decisão de efetivação", "EVALUATION", 90]] },
   ];
-
   for (const [idx, def] of stageDefs.entries()) {
-    const stageTemplate = await prisma.onboardingStageTemplate.upsert({
+    const st = await prisma.onboardingStageTemplate.upsert({
       where: { id: `stp-${idx}` },
       update: {},
-      create: {
-        id: `stp-${idx}`,
-        templateId: template.id,
-        period: def.period,
-        name: def.name,
-        dayRangeStart: def.start,
-        dayRangeEnd: def.end,
-        ownerRole: def.owner,
-        order: idx + 1,
-      },
+      create: { id: `stp-${idx}`, templateId: template.id, period: def.period, name: def.name, dayRangeStart: def.start, dayRangeEnd: def.end, owner: def.owner, order: idx + 1 },
     });
-    for (const [itemIdx, item] of def.items.entries()) {
+    for (const [j, [title, type, offset]] of def.items.entries()) {
       await prisma.checklistItemTemplate.upsert({
-        where: { id: `cit-${idx}-${itemIdx}` },
+        where: { id: `cit-${idx}-${j}` },
         update: {},
-        create: {
-          id: `cit-${idx}-${itemIdx}`,
-          stageTemplateId: stageTemplate.id,
-          title: item.title,
-          type: item.type,
-          dueDayOffset: item.offset,
-          order: itemIdx + 1,
-        },
+        create: { id: `cit-${idx}-${j}`, stageTemplateId: st.id, title, type, dueDayOffset: offset, order: j + 1 },
       });
     }
   }
-
-  // ── Colaboradores ──
-  const gestorRecepcao = await prisma.employee.upsert({
-    where: { id: "emp-gestor-recepcao" },
-    update: {},
-    create: {
-      id: "emp-gestor-recepcao",
-      fullName: "Marina Souza",
-      unitId: brisaBarra.id,
-      departmentId: deptByName["Recepção"].id,
-      positionId: posGestorRecepcao.id,
-      status: EmployeeStatus.ATIVO,
-      admissionDate: new Date("2022-03-01"),
-    },
-  });
-
-  const buddyRecepcao = await prisma.employee.upsert({
-    where: { id: "emp-buddy-recepcao" },
-    update: {},
-    create: {
-      id: "emp-buddy-recepcao",
-      fullName: "Carlos Pereira",
-      unitId: brisaBarra.id,
-      departmentId: deptByName["Recepção"].id,
-      positionId: posRecepcionista.id,
-      managerId: gestorRecepcao.id,
-      status: EmployeeStatus.ATIVO,
-      admissionDate: new Date("2023-01-10"),
-    },
-  });
-
-  const novoColaborador = await prisma.employee.upsert({
-    where: { id: "emp-novo-recepcionista" },
-    update: {},
-    create: {
-      id: "emp-novo-recepcionista",
-      fullName: "Júlia Ramos",
-      unitId: brisaBarra.id,
-      departmentId: deptByName["Recepção"].id,
-      positionId: posRecepcionista.id,
-      managerId: gestorRecepcao.id,
-      buddyId: buddyRecepcao.id,
-      status: EmployeeStatus.EM_ONBOARDING,
-      admissionDate: new Date(),
-    },
-  });
-
-  const camareira = await prisma.employee.upsert({
-    where: { id: "emp-camareira" },
-    update: {},
-    create: {
-      id: "emp-camareira",
-      fullName: "Beatriz Lima",
-      unitId: brisaBarra.id,
-      departmentId: deptByName["Governança"].id,
-      positionId: posCamareira.id,
-      managerId: gestorRecepcao.id,
-      status: EmployeeStatus.ATIVO,
-      admissionDate: new Date("2023-06-01"),
-    },
-  });
-
-  const rhEmployee = await prisma.employee.upsert({
-    where: { id: "emp-rh" },
-    update: {},
-    create: {
-      id: "emp-rh",
-      fullName: "Patrícia Gomes",
-      unitId: brisaBarra.id,
-      departmentId: deptByName["RH"].id,
-      positionId: posRH.id,
-      status: EmployeeStatus.ATIVO,
-      admissionDate: new Date("2021-05-01"),
-    },
-  });
-
-  // ── Usuários (um por perfil do RBAC) ──
-  const passwordHash = await bcrypt.hash("Riale@2026", 10);
-  const users: Array<{ id: string; email: string; name: string; role: Role; unitId?: string; employeeId?: string }> = [
-    { id: "u-admin", email: "admin@rialehoteis.com.br", name: "Admin Riale", role: Role.ADMIN },
-    { id: "u-rhcorp", email: "rh.corporativo@rialehoteis.com.br", name: "RH Corporativo", role: Role.RH_CORPORATIVO },
-    { id: "u-rhunidade", email: "rh.brisabarra@rialehoteis.com.br", name: "Patrícia Gomes", role: Role.RH_UNIDADE, unitId: brisaBarra.id, employeeId: rhEmployee.id },
-    { id: "u-gestor", email: "marina.souza@rialehoteis.com.br", name: "Marina Souza", role: Role.GESTOR, unitId: brisaBarra.id, employeeId: gestorRecepcao.id },
-    { id: "u-colab", email: "julia.ramos@rialehoteis.com.br", name: "Júlia Ramos", role: Role.COLABORADOR, unitId: brisaBarra.id, employeeId: novoColaborador.id },
-    { id: "u-diretoria", email: "diretoria@rialehoteis.com.br", name: "Diretoria Riale", role: Role.DIRETORIA_READONLY },
-  ];
-  for (const u of users) {
-    await prisma.user.upsert({
-      where: { id: u.id },
-      update: {},
-      create: { ...u, passwordHash },
-    });
-  }
-
-  // ── Processo de onboarding real para Júlia Ramos ──
-  const process = await prisma.onboardingProcess.upsert({
-    where: { id: "onb-julia" },
-    update: {},
-    create: {
-      id: "onb-julia",
-      employeeId: novoColaborador.id,
-      templateId: template.id,
-      startDate: new Date(),
-    },
-  });
-
-  const stageTemplates = await prisma.onboardingStageTemplate.findMany({
-    where: { templateId: template.id },
-    include: { checklistItemTemplates: true },
-    orderBy: { order: "asc" },
-  });
-
-  for (const [idx, st] of stageTemplates.entries()) {
-    const stage = await prisma.onboardingStage.upsert({
-      where: { id: `os-julia-${idx}` },
-      update: {},
-      create: {
-        id: `os-julia-${idx}`,
-        processId: process.id,
-        name: st.name,
-        period: st.period,
-        order: st.order,
-        status: idx === 0 ? "CONCLUIDA" : idx === 1 ? "EM_ANDAMENTO" : "PENDENTE",
-        responsibleId: st.ownerRole === Role.GESTOR ? gestorRecepcao.id : rhEmployee.id,
-      },
-    });
-
-    for (const [itemIdx, cit] of st.checklistItemTemplates.entries()) {
-      await prisma.checklistItem.upsert({
-        where: { id: `ci-julia-${idx}-${itemIdx}` },
-        update: {},
-        create: {
-          id: `ci-julia-${idx}-${itemIdx}`,
-          title: cit.title,
-          type: cit.type,
-          origin: ChecklistOrigin.ONBOARDING,
-          employeeId: novoColaborador.id,
-          onboardingStageId: stage.id,
-          responsibleId: st.ownerRole === Role.GESTOR ? gestorRecepcao.id : rhEmployee.id,
-          dueDate: new Date(Date.now() + cit.dueDayOffset * 86400000),
-          status: idx === 0 ? ChecklistStatus.CONCLUIDO : ChecklistStatus.PENDENTE,
-        },
-      });
-    }
-  }
-
-  // ── PDI de exemplo ──
-  await prisma.pDI.upsert({
-    where: { id: "pdi-julia-1" },
-    update: {},
-    create: {
-      id: "pdi-julia-1",
-      employeeId: novoColaborador.id,
-      onboardingProcessId: process.id,
-      origin: PDIOrigin.PLANO_CARREIRA,
-      gapDescription: "Ainda em curva de aprendizado no Totvs para emissão de tarifas.",
-      developmentGoal: "Realizar check-in completo sem erro de tarifa em 100% dos atendimentos.",
-      recommendedAction: "Acompanhamento diário do buddy por 2 semanas + treinamento Totvs na Sólides.",
-      executorId: novoColaborador.id,
-      monitorId: gestorRecepcao.id,
-      status: PDIStatus.EM_ANDAMENTO,
-      completionPct: 30,
-      dueDate: new Date(Date.now() + 30 * 86400000),
-    },
-  });
 
   console.log("Seed concluído.");
-  console.log("Usuários (senha para todos: Riale@2026):");
-  users.forEach((u) => console.log(`  ${u.role.padEnd(20)} ${u.email}`));
+  console.log(`Senha dos usuários de teste: ${SEED_PASSWORD}`);
+  for (const u of TEST_USERS) console.log(`  ${u.role.padEnd(7)} CPF ${testCpf(u.cpfBase).replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")}  (${u.name})`);
 }
 
 main()
@@ -447,6 +218,4 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .finally(() => prisma.$disconnect());

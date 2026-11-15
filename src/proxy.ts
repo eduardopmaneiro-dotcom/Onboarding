@@ -1,16 +1,19 @@
-import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+
+/** Rotas acessíveis sem sessão. */
+const PUBLIC = ["/login", "/recuperar-senha", "/redefinir-senha", "/api/v1/health"];
 
 export default auth((req) => {
+  const { pathname } = req.nextUrl;
+  const isPublic = PUBLIC.some((p) => pathname === p || pathname.startsWith(p + "/"));
   const isLoggedIn = !!req.auth;
-  const isLoginPage = req.nextUrl.pathname === "/login";
 
-  if (!isLoggedIn && !isLoginPage) {
+  if (!isLoggedIn && !isPublic) {
+    if (pathname.startsWith("/api/")) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     return NextResponse.redirect(new URL("/login", req.url));
   }
-  if (isLoggedIn && isLoginPage) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
-  }
+  if (isLoggedIn && pathname === "/login") return NextResponse.redirect(new URL("/dashboard", req.url));
 });
 
 export const config = {
