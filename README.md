@@ -4,7 +4,10 @@ Plataforma web interna da **Riale Hotéis** (Brisa Barra, Imperial e Vilamar). E
 construída para receber, em fases, os módulos de recrutamento, admissão, remuneração,
 indicadores e carreira.
 
-> **Fase atual: 6 — Remuneração, benefícios e inteligência de mercado** (salário-base por cargo e
+> **Fase atual: 7 — Estrutura organizacional e desenvolvimento de carreira** (descritivos versionados
+> com requisitos mínimos separados do PDI, plano de cargos e salários com faixas, trilhas visuais
+> configuráveis, banco de talentos por compatibilidade, portal do colaborador preparado e indicadores
+> de carreira — ver [`docs/CARREIRA.md`](docs/CARREIRA.md)), sobre a **Fase 6 — Remuneração, benefícios e inteligência de mercado** (salário-base por cargo e
 > colaborador, lançamentos pagos, benefícios institucionais sem valores inventados, remuneração total
 > e custo por parcelas, Elogio Premiado, PPR parametrizável e pesquisa salarial — ver
 > [`docs/REMUNERACAO.md`](docs/REMUNERACAO.md)), sobre a **Fase 5 — Admissão e ciclo inicial do colaborador** (encaminhamento do aprovado,
@@ -134,11 +137,16 @@ Senha de todos: **`Riale@2026Seguro`**
 | `npm run test:e2e:indicadores` | Navegador: painel, filtros, tela × Excel exportado, PDF, metas de SLA, escopo do gestor, celular |
 | `npm run test:e2e:admissao` | Navegador: candidato aprovado → admissão (dados, anexo, recusa, exame, ASO) → colaborador → marco → desligamento → permanência; escopo da gestora |
 | `npm run test:e2e:remuneracao` | Navegador: parcelas e custo total, lançamento com encargos, origem do valor do benefício, Elogio Premiado, PPR, mercado, acesso restrito |
+| `npm run test:e2e:carreira` | Navegador: trilha visual, descritivo (requisitos × PDI), publicação com origem, elegibilidade, PDI, portal, indicadores, banco de talentos, gestora |
 | `npm run test:e2e:first-access` | Banco de produção vazio: primeiro acesso (CPF + código), cadastro dos demais usuários, troca obrigatória de senha |
 
 O E2E exige o servidor no ar (`npm start`) e o Playwright instalado
 (`npm i -D playwright && npx playwright install chromium`). Capturas de tela ficam em
 `tests/e2e/screenshots/`.
+
+**Resultado na entrega da Fase 7:** 29/29 unitários; 65/65 de integração (58 anteriores + 7 de
+carreira); E2E 15/15 (Fase 1), 7/7 (recrutamento), 4/4 (comunicação), 7/7 (indicadores), 10/10
+(admissão), 8/8 (remuneração) e 9/9 (carreira), sobre banco recriado do zero.
 
 **Resultado na entrega da Fase 6:** 25/25 unitários; 58/58 de integração (50 anteriores + 8 de
 remuneração com totais conferidos à mão); E2E 15/15 (Fase 1), 7/7 (recrutamento), 4/4 (comunicação),

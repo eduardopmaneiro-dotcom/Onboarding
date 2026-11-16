@@ -16,6 +16,7 @@ import { simulateAdmissions } from "./demo-admission";
 import { DEFAULT_DOC_TYPES } from "../src/modules/admission/constants";
 import { DEFAULT_BENEFITS, DEFAULT_CHARGES, DEFAULT_PAY_TYPES } from "../src/modules/compensation/constants";
 import { simulateCompensation } from "./demo-compensation";
+import { simulateCareer } from "./demo-career";
 
 try {
   process.loadEnvFile?.(".env"); // ambiente local (crypto/Prisma leem o env sob demanda); na Vercel as variáveis já vêm do ambiente
@@ -299,6 +300,11 @@ async function main() {
   if (demo && (await prisma.positionSalary.count()) === 0) {
     const r = await simulateCompensation(prisma);
     console.log(`Remuneração simulada: ${r.salaries} salários, ${r.items} lançamentos, ${r.market} registros de mercado.`);
+  }
+  // ── Carreira de demonstração (descritivos e trilha FICTÍCIOS, só com SEED_DEMO) ──
+  if (demo && (await prisma.careerPath.count()) === 0) {
+    const r = await simulateCareer(prisma);
+    console.log(`Carreira simulada: ${r.descriptors} descritivos, ${r.paths} trilha.`);
   }
 
   console.log(`Seed concluído (${demo ? "estrutura + demonstração" : "estrutura"}).`);

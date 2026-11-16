@@ -27,10 +27,14 @@ export const SETTINGS = {
   "experiencia.conta_dia_admissao": { label: "O dia da admissão conta como 1º dia da experiência (sim/não)", schema: z.preprocess((v) => (typeof v === "string" ? ["true", "sim", "1", "s"].includes(v.trim().toLowerCase()) : v), z.boolean()), default: true },
   "experiencia.aviso_dias": { label: "Avisar o RH quantos dias antes de cada marco", schema: z.coerce.number().int().min(0).max(30), default: 5 },
   "experiencia.alerta_email": { label: "Enviar os alertas da experiência também por e-mail ao RH (sim/não)", schema: z.preprocess((v) => (typeof v === "string" ? ["true", "sim", "1", "s"].includes(v.trim().toLowerCase()) : v), z.boolean()), default: true },
+  "carreira.nota_minima": { label: "Nota mínima de promoção (0–100) — RH-CAR-01", schema: z.coerce.number().min(0).max(100), default: 70 },
+  "portal.faixa_salarial": { label: "Portal do colaborador: faixa salarial exibida (NAO_EXIBIR, REFERENCIA ou FAIXA)", schema: z.enum(["NAO_EXIBIR", "REFERENCIA", "FAIXA"]), default: "NAO_EXIBIR" },
 } as const;
 
 /** Configurações que o RH pode alterar (regras da empresa para a admissão), além do Admin. */
 export const RH_SETTINGS: SettingKey[] = ["experiencia.marcos", "experiencia.conta_dia_admissao", "experiencia.aviso_dias", "experiencia.alerta_email"];
+/** Política de carreira: Admin ou RH com carreira.manage. */
+export const CAREER_SETTINGS: SettingKey[] = ["carreira.nota_minima", "portal.faixa_salarial"];
 
 export type SettingKey = keyof typeof SETTINGS;
 
@@ -53,6 +57,7 @@ export async function listSettings() {
 
 export async function updateSetting(actor: CurrentUser, key: string, rawValue: unknown) {
   if (RH_SETTINGS.includes(key as SettingKey) && actor.permissions.has("admissoes.config")) { /* regra da admissão: RH também pode */ }
+  else if (CAREER_SETTINGS.includes(key as SettingKey) && actor.permissions.has("carreira.manage") && (actor.role === "ADMIN" || !actor.unitId)) { /* política de carreira */ }
   else assertCan(actor, "settings.manage");
   if (!(key in SETTINGS)) throw new ValidationError("Configuração desconhecida");
   const def = SETTINGS[key as SettingKey];

@@ -12,6 +12,9 @@ import { ResultPanel } from "@/components/recruitment/result-panel";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { addApplicationAction, externalCheckAction, resultAction, saveSalaryAction, updateCandidateAction } from "../../recrutamento/actions";
 import { forwardAction } from "../../admissoes/actions";
+import { TalentProfile } from "@/components/talent-profile";
+import { matchesForCandidate } from "@/modules/career/talent";
+import { competencyCatalog } from "@/modules/career/descriptors";
 import { fmtDate } from "@/lib/datetime";
 
 export const metadata = { title: "Candidato" };
@@ -33,6 +36,12 @@ export default async function CandidatePage({ params, searchParams }: { params: 
     listReasons(),
     manage ? listJobs(user, { status: "ABERTA" }) : Promise.resolve([]),
     sp.editar ? prisma.position.findMany({ where: { active: true }, orderBy: { title: "asc" }, select: { id: true, title: true } }) : Promise.resolve([]),
+  ]);
+  const [profile, matches, allPositions, competencyList] = await Promise.all([
+    prisma.candidate.findUniqueOrThrow({ where: { id: c.id }, select: { id: true, education: true, competencies: true, experiences: { orderBy: { createdAt: "asc" }, select: { id: true, roleTitle: true, company: true, months: true, position: { select: { title: true } } } } } }),
+    matchesForCandidate(user, c.id),
+    prisma.position.findMany({ where: { active: true }, orderBy: { title: "asc" }, select: { id: true, title: true } }),
+    competencyCatalog(),
   ]);
   const linkable = openJobs.filter((j) => !c.applications.some((a) => a.jobOpeningId === j.id));
 
@@ -187,6 +196,8 @@ export default async function CandidatePage({ params, searchParams }: { params: 
           )}
         </div>
 
+        <div className="space-y-6">
+        <TalentProfile c={profile} matches={matches} positions={allPositions} competencies={competencyList} manage={manage} />
         <Card title="Histórico">
           <ol className="relative space-y-4 border-l border-stone-200 pl-5">
             {c.events.map((e) => (
@@ -198,6 +209,7 @@ export default async function CandidatePage({ params, searchParams }: { params: 
             ))}
           </ol>
         </Card>
+        </div>
       </div>
     </>
   );

@@ -159,7 +159,7 @@ test("Remuneração total e custo: parcelas separadas conferidas à mão", async
   const c = r.rows.find((x) => x.id === E.C)!.comp;
   assert.deepEqual([c.encargos.total, c.custoTotal, c.ppr], [0, 8000, null]); // PJ
   const tableRef = r.rows.find((x) => x.id === E.A)!.tableRef;
-  assert.deepEqual(tableRef, { value: 2100, scope: "unidade" });
+  assert.deepEqual(tableRef, { value: 2100, scope: "unidade", min: null, max: null });
   close(r.totals.custo, a.custoTotal + b.custoTotal + c.custoTotal);
   assert.equal(r.totals.premiacoes, 250); // prêmio 100 + Elogio 150
   // filtro por cargo e competência sem vínculo

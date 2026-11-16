@@ -108,7 +108,8 @@ export async function listPositions(_user: CurrentUser, opts: { includeInactive?
     orderBy: [{ careerTrack: { name: "asc" } }, { level: "asc" }, { title: "asc" }],
     include: {
       careerTrack: { select: { id: true, name: true } },
-      _count: { select: { managers: true, employees: true } },
+      descriptions: { where: { status: { in: ["VIGENTE", "RASCUNHO"] } }, select: { status: true, version: true } },
+      _count: { select: { managers: true, employees: { where: { status: { not: "DESLIGADO" } } } } },
     },
   });
 }

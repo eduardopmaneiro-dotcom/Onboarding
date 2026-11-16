@@ -33,7 +33,7 @@ export default async function EmployeePage({ params, searchParams }: { params: P
         title={e.fullName}
         subtitle={`Matrícula ${e.internalId ?? "—"} · ${e.position.title} · ${e.department.name} · ${e.department.unit.name}`}
         breadcrumb={{ href: "/colaboradores", label: "Colaboradores" }}
-        actions={<div className="flex items-center gap-2">{can(user, "remuneracao.view") && <Link href={`/remuneracao/colaborador/${e.id}`} className="btn-ghost">Remuneração</Link>}{e.status === "DESLIGADO" ? <Badge>Desligado</Badge> : inProbation ? <Badge tone="gold">Em experiência até {fmtDate(e.probationEndDate)}</Badge> : <Badge tone="green">Ativo</Badge>}</div>}
+        actions={<div className="flex items-center gap-2"><Link href={`/carreira/colaborador/${e.id}`} className="btn-ghost">Carreira</Link>{can(user, "remuneracao.view") && <Link href={`/remuneracao/colaborador/${e.id}`} className="btn-ghost">Remuneração</Link>}{e.status === "DESLIGADO" ? <Badge>Desligado</Badge> : inProbation ? <Badge tone="gold">Em experiência até {fmtDate(e.probationEndDate)}</Badge> : <Badge tone="green">Ativo</Badge>}</div>}
       />
       {sp.admitido && <p className="mb-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Contratação confirmada: o candidato agora é colaborador. Todo o histórico seletivo continua disponível abaixo.</p>}
 

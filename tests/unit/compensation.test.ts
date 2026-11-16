@@ -12,8 +12,8 @@ test("Competência e vigências", () => {
   assert.equal(resolveBase(2000, [{ amount: 2200, effectiveFrom: "2026-03-01" }], "2026-02-28"), 2000);
   assert.equal(resolveBase(null, [], "2026-02-28"), null);
   const table = [{ unitId: null, baseSalary: 2000, effectiveFrom: "2026-01-01" }, { unitId: "U1", baseSalary: 2100, effectiveFrom: "2026-01-01" }, { unitId: null, baseSalary: 2050, effectiveFrom: "2026-07-01" }];
-  assert.deepEqual(resolvePositionSalary(table, "U1", "2026-08-01"), { value: 2100, scope: "unidade" });
-  assert.deepEqual(resolvePositionSalary(table, "U2", "2026-08-01"), { value: 2050, scope: "geral" });
+  assert.deepEqual(resolvePositionSalary(table, "U1", "2026-08-01"), { value: 2100, scope: "unidade", min: null, max: null });
+  assert.deepEqual(resolvePositionSalary(table, "U2", "2026-08-01"), { value: 2050, scope: "geral", min: null, max: null });
   assert.equal(resolvePositionSalary(table, "U2", "2025-12-31"), null);
 });
 

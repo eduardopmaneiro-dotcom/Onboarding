@@ -36,12 +36,14 @@ export async function listPositionTable(user: CurrentUser) {
   return prisma.positionSalary.findMany({ orderBy: [{ position: { title: "asc" } }, { effectiveFrom: "desc" }], include: { position: { select: { title: true } }, unit: { select: { name: true } } } });
 }
 
-const positionSalaryInput = z.object({ positionId: z.string({ error: "Escolha o cargo" }).min(1, "Escolha o cargo"), unitId: z.string().optional(), baseSalary: money("Salário-base"), effectiveFrom: dateStr, note: z.string().trim().max(200).optional() });
+const positionSalaryInput = z.object({ positionId: z.string({ error: "Escolha o cargo" }).min(1, "Escolha o cargo"), unitId: z.string().optional(), baseSalary: money("Salário de referência"), minSalary: optMoney("Salário mínimo da faixa"), maxSalary: optMoney("Salário máximo da faixa"), effectiveFrom: dateStr, note: z.string().trim().max(200).optional() });
 
 export async function savePositionSalary(user: CurrentUser, raw: unknown) {
   assertConfig(user);
   const d = positionSalaryInput.parse(raw);
-  const row = await prisma.positionSalary.create({ data: { positionId: d.positionId, unitId: d.unitId || null, baseSalary: d.baseSalary, effectiveFrom: localToDate(d.effectiveFrom), note: d.note ?? null, createdById: user.id } });
+  if (d.minSalary !== null && d.minSalary > d.baseSalary) throw new ValidationError("O mínimo da faixa não pode ser maior que a referência", { minSalary: ["Acima da referência"] });
+  if (d.maxSalary !== null && d.maxSalary < d.baseSalary) throw new ValidationError("O máximo da faixa não pode ser menor que a referência", { maxSalary: ["Abaixo da referência"] });
+  const row = await prisma.positionSalary.create({ data: { positionId: d.positionId, unitId: d.unitId || null, baseSalary: d.baseSalary, minSalary: d.minSalary, maxSalary: d.maxSalary, effectiveFrom: localToDate(d.effectiveFrom), note: d.note ?? null, createdById: user.id } });
   await recordAudit({ entityType: "PositionSalary", entityId: row.id, action: "CREATE", actorId: user.id, actorRole: user.role, newValue: d });
   return row;
 }
@@ -386,7 +388,7 @@ export async function competenceReport(user: CurrentUser, comp: string, f: { uni
         ppr = { monthly: Math.round(((prev?.monthly ?? 0) + sh.share / sh.months) * 100) / 100, projected: (prev?.projected ?? false) || p.projected };
       }
       const comp_ = totalCompensation({ contractType: e.contractType, base, items, elogio: el ? { value: el.value, counted: el.counted } : null, elogioRuleMissing: approved.length > 0 && !rule, ppr, benefits, rates: rateDefs });
-      const tableRef = resolvePositionSalary(table.filter((t) => t.positionId === e.positionId).map((t) => ({ unitId: t.unitId, baseSalary: Number(t.baseSalary), effectiveFrom: dateKey(t.effectiveFrom) })), e.unitId, last);
+      const tableRef = resolvePositionSalary(table.filter((t) => t.positionId === e.positionId).map((t) => ({ unitId: t.unitId, baseSalary: Number(t.baseSalary), minSalary: N(t.minSalary), maxSalary: N(t.maxSalary), effectiveFrom: dateKey(t.effectiveFrom) })), e.unitId, last);
       return { id: e.id, name: e.name, internalId: e.internalId, unitName: e.unitName, departmentName: e.departmentName, positionTitle: e.positionTitle, contractType: e.contractType, items, benefits, tableRef, comp: comp_, monthsInCompetence: monthsWorked(e.admission, e.termination, from, last) };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

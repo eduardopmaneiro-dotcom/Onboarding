@@ -14,7 +14,7 @@ const ALLOWED_MIME: Record<string, string[]> = {
   "image/png": [".png"],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
 };
-const OWNER_TYPES = ["Employee", "Candidate", "Manager", "JobOpening", "AdmissionDocument", "MedicalExam"] as const;
+const OWNER_TYPES = ["Employee", "Candidate", "Manager", "JobOpening", "AdmissionDocument", "MedicalExam", "JobDescription"] as const;
 /** Documentos admissionais: acesso restrito (permissão própria + escopo da unidade do processo). */
 const RESTRICTED: Record<string, (ownerId: string) => Promise<string | null>> = {
   AdmissionDocument: async (id) => (await prisma.admissionDocument.findUnique({ where: { id }, select: { admission: { select: { department: { select: { unitId: true } } } } } }))?.admission.department.unitId ?? null,

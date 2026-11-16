@@ -29,12 +29,12 @@ export function resolveBase(admissionSalary: number | null, history: Array<{ amo
 }
 
 /** Tabela do cargo vigente: a da unidade tem precedência sobre a geral. */
-export function resolvePositionSalary(rows: Array<{ unitId: string | null; baseSalary: number; effectiveFrom: string }>, unitId: string, at: string) {
+export function resolvePositionSalary(rows: Array<{ unitId: string | null; baseSalary: number; effectiveFrom: string; minSalary?: number | null; maxSalary?: number | null }>, unitId: string, at: string) {
   const pick = (xs: typeof rows) => xs.filter((r) => r.effectiveFrom <= at).sort((a, b) => (a.effectiveFrom < b.effectiveFrom ? 1 : -1))[0];
   const unit = pick(rows.filter((r) => r.unitId === unitId));
-  if (unit) return { value: unit.baseSalary, scope: "unidade" as const };
-  const all = pick(rows.filter((r) => r.unitId === null));
-  return all ? { value: all.baseSalary, scope: "geral" as const } : null;
+  const row = unit ?? pick(rows.filter((r) => r.unitId === null));
+  if (!row) return null;
+  return { value: row.baseSalary, scope: unit ? ("unidade" as const) : ("geral" as const), min: row.minSalary ?? null, max: row.maxSalary ?? null };
 }
 
 export type BenefitDef = { name: string; costType: "MENSAL" | "POR_DIA" | "SEM_CUSTO"; companyCost: number | null; dependentCost: number | null; discountType: "NENHUM" | "FIXO" | "PERCENTUAL_SALARIO"; discountValue: number | null };

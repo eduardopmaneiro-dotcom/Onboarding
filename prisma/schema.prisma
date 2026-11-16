@@ -146,6 +146,7 @@ enum CareerLevel {
   N7
 }
 
+/// Família ocupacional (RH-CAR-01: ex. "Recepção e Portaria"). Agrupa cargos; a progressão entre cargos fica em CareerPath.
 model CareerTrack {
   id          String  @id @default(cuid())
   name        String  @unique
@@ -154,38 +155,44 @@ model CareerTrack {
 
   positions Position[]
   stages    CareerStage[]
+  paths     CareerPath[]
 }
 
 model Position {
   // Cargo: catálogo corporativo único (comparável entre unidades — base para remuneração e carreira).
   // Onde a pessoa trabalha é dado pelo Departamento (que pertence a uma Unidade).
-  id                    String               @id @default(cuid())
+  id                    String                @id @default(cuid())
   title                 String
-  code                  String?              @unique // CBO ou código interno
+  code                  String?               @unique // CBO ou código interno
   level                 CareerLevel
-  description           String?              @db.Text
+  description           String?               @db.Text
   careerTrackId         String?
-  careerTrack           CareerTrack?         @relation(fields: [careerTrackId], references: [id])
-  isLeadership          Boolean              @default(false)
+  careerTrack           CareerTrack?          @relation(fields: [careerTrackId], references: [id])
+  isLeadership          Boolean               @default(false)
   /// Área padrão do cargo (nome do departamento) — usada para sugerir o departamento na vaga
   defaultDepartmentName String?
   /// Outras grafias do cargo (aprendidas na importação: "Ass. Governança", "garçom"…)
-  aliases               String[]             @default([])
-  active                Boolean              @default(true)
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
+  aliases               String[]              @default([])
+  active                Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
   employees             Employee[]
-  desiredByCandidates   Candidate[]          @relation("CandidateDesiredPosition")
+  desiredByCandidates   Candidate[]           @relation("CandidateDesiredPosition")
   jobOpenings           JobOpening[]
   onboardingTemplates   OnboardingTemplate[]
   pdlCandidacies        PDLCandidacy[]
-  movementsFrom         MovementHistory[]    @relation("MovementFrom")
-  movementsTo           MovementHistory[]    @relation("MovementTo")
+  movementsFrom         MovementHistory[]     @relation("MovementFrom")
+  movementsTo           MovementHistory[]     @relation("MovementTo")
   managers              Manager[]
   SlaTarget             SlaTarget[]
   admissions            Admission[]
   salaryTable           PositionSalary[]
   marketSalaries        MarketSalary[]
+  descriptions          JobDescription[]      @relation("DescriptorPosition")
+  reportedBy            JobDescription[]      @relation("DescriptorReportsTo")
+  pathSteps             CareerPathStep[]
+  candidateExperiences  CandidateExperience[]
+  talentEntries         TalentPoolEntry[]
 
   @@unique([title])
 }
@@ -300,6 +307,8 @@ model Employee {
   terminationReason String?          @db.Text
   terminationById   String?
   createdById       String?
+  /// Login futuro do Portal do Colaborador (arquitetura preparada; ainda não habilitado)
+  portalUserId      String?          @unique
   departmentId      String // departamento → unidade (sem duplicar a unidade)
   department        Department       @relation(fields: [departmentId], references: [id])
   positionId        String
@@ -398,6 +407,9 @@ model MovementHistory {
   toManager        Manager?     @relation("MovementToManager", fields: [toManagerId], references: [id])
   /// Valores salariais ficam em módulo próprio (Remuneração, Fase futura) com acesso mais restrito
   reason           String?      @db.Text
+  /// Vaga preenchida por esta movimentação (recrutamento interno)
+  jobOpeningId     String?
+  jobOpening       JobOpening?  @relation(fields: [jobOpeningId], references: [id])
   recordedById     String
   recordedBy       User         @relation(fields: [recordedById], references: [id])
   createdAt        DateTime     @default(now())
@@ -469,7 +481,8 @@ model JobOpening {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  applications Application[]
+  applications  Application[]
+  internalFills MovementHistory[]
 
   @@index([status])
   @@index([positionId])
@@ -510,6 +523,8 @@ model Candidate {
   consentVersion    String?
   retainUntil       DateTime? // após esta data: anonimização
   anonymizedAt      DateTime?
+  education         EducationLevel?
+  competencies      String[]        @default([])
   hiredEmployeeId   String?         @unique
   hiredEmployee     Employee?       @relation(fields: [hiredEmployeeId], references: [id])
   importBatchId     String?
@@ -517,10 +532,12 @@ model Candidate {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  applications Application[]
-  events       CandidateEvent[]
-  employments  Employee[]       @relation("EmployeeCandidate")
-  admissions   Admission[]
+  applications  Application[]
+  events        CandidateEvent[]
+  employments   Employee[]            @relation("EmployeeCandidate")
+  admissions    Admission[]
+  experiences   CandidateExperience[]
+  talentEntries TalentPoolEntry[]
 
   @@index([email])
   @@index([nameNormalized])
@@ -1033,6 +1050,7 @@ model PromotionScore {
   pdiCompletion       Float    @default(0)
   conduct             Float    @default(0)
   totalScore          Float    @default(0)
+  evaluatedById       String?
   committeeRequired   Boolean  @default(false)
   committeeMinutes    String?  @db.Text
   decision            String?
@@ -1550,7 +1568,9 @@ model PositionSalary {
   position      Position @relation(fields: [positionId], references: [id])
   unitId        String? // vazio = todas as unidades
   unit          Unit?    @relation(fields: [unitId], references: [id])
-  baseSalary    Decimal  @db.Decimal(10, 2)
+  baseSalary    Decimal  @db.Decimal(10, 2) // salário de referência da faixa
+  minSalary     Decimal? @db.Decimal(10, 2) // mínimo da faixa
+  maxSalary     Decimal? @db.Decimal(10, 2) // máximo da faixa
   effectiveFrom DateTime
   note          String?
   createdById   String
@@ -1811,4 +1831,132 @@ model MarketSalary {
   createdAt     DateTime     @default(now())
 
   @@index([positionId])
+}
+
+// ───────────────────────── CARGOS, SALÁRIOS E CARREIRA (Fase 7) ─────────────────────────
+
+enum EducationLevel {
+  NAO_EXIGIDA
+  FUNDAMENTAL_INCOMPLETO
+  FUNDAMENTAL
+  MEDIO_INCOMPLETO
+  MEDIO
+  TECNICO
+  SUPERIOR_INCOMPLETO
+  SUPERIOR
+  POS_GRADUACAO
+}
+
+enum DescriptorStatus {
+  RASCUNHO
+  VIGENTE
+  ARQUIVADO
+}
+
+/// Descritivo de cargo, versionado. Requisitos mínimos (obrigatórios para ocupar o cargo) ficam
+/// separados das competências e conhecimentos que podem ser desenvolvidos pelo PDI.
+model JobDescription {
+  id                   String           @id @default(cuid())
+  positionId           String
+  position             Position         @relation("DescriptorPosition", fields: [positionId], references: [id])
+  version              Int
+  status               DescriptorStatus @default(RASCUNHO)
+  objective            String?          @db.Text
+  responsibilities     String[]         @default([])
+  minRequirements      String[]         @default([]) // requisitos mínimos (obrigatórios)
+  education            EducationLevel?
+  educationNote        String?
+  minExperienceMonths  Int?
+  experienceNote       String?
+  technicalRequired    String[]         @default([]) // conhecimentos técnicos exigidos
+  technicalDevelopable String[]         @default([]) // conhecimentos técnicos desenvolvíveis (PDI)
+  competencies         String[]         @default([]) // competências fundamentais (desenvolvíveis pelo PDI)
+  reportsToId          String? // superior direto (cargo)
+  reportsTo            Position?        @relation("DescriptorReportsTo", fields: [reportsToId], references: [id])
+  sourceRef            String? // documento institucional de origem
+  effectiveFrom        DateTime?
+  approvedById         String?
+  approvedAt           DateTime?
+  createdById          String
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  @@unique([positionId, version])
+}
+
+enum PathStatus {
+  RASCUNHO
+  VIGENTE
+  ARQUIVADO
+}
+
+/// Trilha de carreira: sequência configurável de cargos. Indica possibilidades — não garante promoção.
+model CareerPath {
+  id          String       @id @default(cuid())
+  name        String
+  familyId    String?
+  family      CareerTrack? @relation(fields: [familyId], references: [id])
+  status      PathStatus   @default(RASCUNHO)
+  description String?
+  sourceRef   String? // documento institucional que define a trilha
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  steps CareerPathStep[]
+}
+
+model CareerPathStep {
+  id           String     @id @default(cuid())
+  pathId       String
+  path         CareerPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  order        Int
+  positionId   String
+  position     Position   @relation(fields: [positionId], references: [id])
+  minMonths    Int? // tempo mínimo no passo anterior para ser elegível
+  minScore     Int? // nota mínima de promoção (vazio = política geral)
+  requirements String[]   @default([]) // requisitos mínimos de progressão
+  developable  String[]   @default([]) // competências a desenvolver (PDI)
+
+  @@unique([pathId, order])
+  @@unique([pathId, positionId])
+}
+
+/// Experiência informada pelo candidato, ligada ao catálogo quando possível (base do potencial).
+model CandidateExperience {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id])
+  positionId  String?
+  position    Position? @relation(fields: [positionId], references: [id])
+  roleTitle   String
+  company     String?
+  months      Int?
+  createdById String
+  createdAt   DateTime  @default(now())
+
+  @@index([candidateId])
+}
+
+enum TalentStatus {
+  ATIVO
+  CONTATADO
+  ARQUIVADO
+}
+
+/// Banco de talentos por posição.
+model TalentPoolEntry {
+  id          String       @id @default(cuid())
+  candidateId String
+  candidate   Candidate    @relation(fields: [candidateId], references: [id])
+  positionId  String
+  position    Position     @relation(fields: [positionId], references: [id])
+  reason      String
+  status      TalentStatus @default(ATIVO)
+  note        String?
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@unique([candidateId, positionId])
 }

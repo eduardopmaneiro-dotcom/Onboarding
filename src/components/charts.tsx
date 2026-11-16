@@ -70,6 +70,8 @@ export function ColumnTrend({ data, measure, label }: { data: Array<{ key: strin
   );
 }
 
+const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1).replace(".", ","));
+
 /** Indicador com o número de observações e a regra de cálculo. */
 export function RateTile({ title, r }: { title: string; r: Rate }) {
   const ex = Object.entries(r.excluded ?? {}).filter(([, v]) => v);
@@ -77,7 +79,7 @@ export function RateTile({ title, r }: { title: string; r: Rate }) {
     <div className="card p-4" title={r.rule}>
       <p className="text-xs font-medium uppercase tracking-wide text-stone-500">{title}</p>
       <p className="mt-1 font-serif text-3xl font-semibold text-riale-900">{pct(r)}</p>
-      <p className="text-xs text-stone-500">{r.num} de {r.den} (n = {r.den})</p>
+      <p className="text-xs text-stone-500">{n(r.num)} de {n(r.den)} (n = {n(r.den)})</p>
       {ex.length > 0 && <p className="mt-1 text-[11px] text-stone-400">Fora do cálculo: {ex.map(([k, v]) => `${v} ${k}`).join(" · ")}</p>}
       <p className="mt-2 text-[11px] leading-snug text-stone-400">{r.rule}</p>
     </div>

@@ -3,6 +3,7 @@ import { can, requirePermission } from "@/lib/session";
 import { dateKey, fmtDate, fmtDateTime, todayKey } from "@/lib/datetime";
 import { formatMoney, formatPhone } from "@/lib/text";
 import { getJob, jobFormOptions } from "@/modules/recruitment/jobs";
+import { matchesForPosition } from "@/modules/career/talent";
 import { APP_STATUS_LABEL, APP_STATUS_TONE, DECISION_LABEL, EXTERNAL_LABEL, JOB_STATUS_EDITABLE, JOB_STATUS_LABEL, RESULT_LABEL, RESULT_TONE, SCHEDULE_LABEL, SHIFT_LABEL } from "@/modules/recruitment/constants";
 import { ActionForm, Submit } from "@/components/forms";
 import { JobForm } from "@/components/recruitment/job-form";
@@ -16,6 +17,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   const { id } = await params;
   const sp = await searchParams;
   const job = await getJob(user, id);
+  const talent = can(user, "candidatos.view") ? await matchesForPosition(user, job.positionId).then((xs) => xs.filter((m) => !job.applications.some((a) => a.candidateId === m.candidateId))).catch(() => null) : null;
   const manage = can(user, "recrutamento.manage") && !job.isHistorical;
   const status = Object.fromEntries(JOB_STATUS_EDITABLE.map((s) => [s, JOB_STATUS_LABEL[s]]));
   const editing = manage && sp.editar === "1";
@@ -96,6 +98,15 @@ export default async function JobPage({ params, searchParams }: { params: Promis
           </Card>
         </div>
       </div>
+
+      {talent && ["ABERTA", "PAUSADA"].includes(job.status) && (
+        <Card title={`Banco de talentos compatível com ${job.position.title} (${talent.length})`} className="mt-6" actions={<Link href={`/banco-de-talentos?cargo=${job.positionId}`} className="text-xs font-medium text-gold-600 hover:underline">abrir banco →</Link>}>
+          {talent.length === 0 ? <p className="text-sm text-stone-400">Nenhum candidato com evidência de compatibilidade.</p> : (
+            <ul className="divide-y divide-stone-100 text-sm">{talent.slice(0, 6).map((m) => <li key={m.candidateId} className="py-1.5"><Link href={`/candidatos/${m.candidateId}`} className="font-medium text-riale-900 hover:underline">{m.name}</Link> <Badge tone={m.level === "FORTE" ? "green" : "gold"}>{m.level === "FORTE" ? "compatível" : "parcial"}</Badge>{m.pool && <Badge>no banco</Badge>}<span className="block text-xs text-stone-500">{m.evidence.join(" · ")}</span></li>)}</ul>
+          )}
+          <p className="mt-2 text-[11px] text-stone-400">Para preencher com um colaborador (recrutamento interno), registre a movimentação na carreira dele e escolha esta vaga.</p>
+        </Card>
+      )}
 
       {editing && options && (
         <Card title="Editar vaga" className="mt-6 max-w-4xl" actions={<Link href="?" className="text-xs text-stone-500 hover:underline">fechar</Link>}>
