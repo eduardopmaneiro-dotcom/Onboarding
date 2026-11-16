@@ -14,6 +14,8 @@ import { DEFAULT_REASONS } from "../src/modules/recruitment/constants";
 import { simulateRecruitment } from "./demo-recruitment";
 import { simulateAdmissions } from "./demo-admission";
 import { DEFAULT_DOC_TYPES } from "../src/modules/admission/constants";
+import { DEFAULT_BENEFITS, DEFAULT_CHARGES, DEFAULT_PAY_TYPES } from "../src/modules/compensation/constants";
+import { simulateCompensation } from "./demo-compensation";
 
 try {
   process.loadEnvFile?.(".env"); // ambiente local (crypto/Prisma leem o env sob demanda); na Vercel as variáveis já vêm do ambiente
@@ -190,6 +192,17 @@ async function main() {
     });
   }
 
+  // ── Remuneração: rubricas, catálogo de benefícios e encargos — estrutura SEM valores ──
+  for (const [i, t] of DEFAULT_PAY_TYPES.entries()) {
+    await prisma.payItemType.upsert({ where: { code: t.code }, update: { system: !!t.system }, create: { code: t.code, label: t.label, category: t.category, chargeable: t.chargeable, system: !!t.system, sortOrder: (i + 1) * 10 } });
+  }
+  for (const b of DEFAULT_BENEFITS) {
+    await prisma.benefit.upsert({ where: { code: b.code }, update: {}, create: { code: b.code, name: b.name, category: b.category, costType: b.costType, discountType: b.discountType ?? "NENHUM", allUnits: b.allUnits ?? true, description: b.description } });
+  }
+  for (const [i, c] of DEFAULT_CHARGES.entries()) {
+    await prisma.chargeRate.upsert({ where: { code: c.code }, update: {}, create: { code: c.code, label: c.label, legalRef: c.legalRef, sortOrder: (i + 1) * 10 } });
+  }
+
   const demo = process.env.SEED_DEMO === "true";
   if (demo && process.env.VERCEL_ENV === "production") throw new Error("SEED_DEMO não é permitido em produção");
 
@@ -281,6 +294,11 @@ async function main() {
   if (demo && (await prisma.employee.count()) === 0) {
     const r = await simulateAdmissions(prisma);
     console.log(`Admissões simuladas: ${r.admissions.join(", ")}; ${r.staff} colaboradores já admitidos.`);
+  }
+  // ── Remuneração de demonstração (valores FICTÍCIOS, só com SEED_DEMO) ──
+  if (demo && (await prisma.positionSalary.count()) === 0) {
+    const r = await simulateCompensation(prisma);
+    console.log(`Remuneração simulada: ${r.salaries} salários, ${r.items} lançamentos, ${r.market} registros de mercado.`);
   }
 
   console.log(`Seed concluído (${demo ? "estrutura + demonstração" : "estrutura"}).`);

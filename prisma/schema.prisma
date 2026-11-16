@@ -110,8 +110,10 @@ model Unit {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  departments Department[]
-  users       User[]
+  departments  Department[]
+  users        User[]
+  salaryTable  PositionSalary[]
+  benefitUnits BenefitUnit[]
 }
 
 model Department {
@@ -182,6 +184,8 @@ model Position {
   managers              Manager[]
   SlaTarget             SlaTarget[]
   admissions            Admission[]
+  salaryTable           PositionSalary[]
+  marketSalaries        MarketSalary[]
 
   @@unique([title])
 }
@@ -315,6 +319,10 @@ model Employee {
   candidateOrigin Candidate?
   admission       Admission?
   milestones      ProbationMilestone[]
+  salaries        EmployeeSalary[]
+  payItems        PayItem[]
+  benefits        EmployeeBenefit[]
+  elogios         Elogio[]
   onboardings     OnboardingProcess[]
   pdis            PDI[]
   promotionScores PromotionScore[]
@@ -1531,4 +1539,276 @@ model ProbationMilestone {
 
   @@unique([employeeId, days])
   @@index([status, dueDate])
+}
+
+// ───────────────────────── REMUNERAÇÃO, BENEFÍCIOS E MERCADO (Fase 6) ─────────────────────────
+
+/// Tabela salarial por cargo (opcionalmente por unidade), com vigência. A mais recente vigente vale.
+model PositionSalary {
+  id            String   @id @default(cuid())
+  positionId    String
+  position      Position @relation(fields: [positionId], references: [id])
+  unitId        String? // vazio = todas as unidades
+  unit          Unit?    @relation(fields: [unitId], references: [id])
+  baseSalary    Decimal  @db.Decimal(10, 2)
+  effectiveFrom DateTime
+  note          String?
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([positionId, effectiveFrom])
+}
+
+/// Histórico do salário-base do colaborador (somente inserção). Sem registro, vale o salário de admissão.
+model EmployeeSalary {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  amount        Decimal  @db.Decimal(10, 2)
+  effectiveFrom DateTime
+  reason        String
+  createdById   String
+  createdAt     DateTime @default(now())
+
+  @@index([employeeId, effectiveFrom])
+}
+
+enum PayCategory {
+  BASE_PAGO // salário-base efetivamente pago na competência (faltas, admissão no meio do mês etc.)
+  ADICIONAL
+  VARIAVEL
+  PREMIACAO
+}
+
+/// Rubricas configuráveis. `chargeable`: incide encargos. Rubricas de sistema (Elogio Premiado, PPR) são calculadas, não lançadas.
+model PayItemType {
+  id         String      @id @default(cuid())
+  code       String      @unique
+  label      String
+  category   PayCategory
+  chargeable Boolean     @default(true)
+  system     Boolean     @default(false)
+  active     Boolean     @default(true)
+  sortOrder  Int         @default(100)
+
+  items PayItem[]
+}
+
+/// Valor efetivamente pago numa competência (AAAA-MM).
+model PayItem {
+  id          String      @id @default(cuid())
+  employeeId  String
+  employee    Employee    @relation(fields: [employeeId], references: [id])
+  typeId      String
+  type        PayItemType @relation(fields: [typeId], references: [id])
+  competence  String // AAAA-MM
+  amount      Decimal     @db.Decimal(12, 2)
+  description String?
+  createdById String
+  createdAt   DateTime    @default(now())
+
+  @@index([employeeId, competence])
+  @@index([competence])
+}
+
+enum BenefitCategory {
+  VALE_TRANSPORTE
+  ALIMENTACAO
+  PLANO_SAUDE
+  PLANO_ODONTO
+  TOTALPASS
+  EDUCACAO
+  FARMACIA
+  OUTRO
+}
+
+enum BenefitCostType {
+  MENSAL // custo mensal por beneficiário
+  POR_DIA // valor por dia (ex.: vale-transporte) × dias no mês da adesão
+  SEM_CUSTO // convênio/desconto sem custo para a empresa
+}
+
+enum DiscountType {
+  NENHUM
+  FIXO // R$ por mês
+  PERCENTUAL_SALARIO // % do salário-base (ex.: vale-transporte), limitado ao custo
+}
+
+/// Benefício institucional. Valores vêm da empresa (vazios = não informados, nunca zero).
+model Benefit {
+  id            String          @id @default(cuid())
+  code          String          @unique
+  name          String
+  category      BenefitCategory
+  provider      String?
+  description   String?
+  costType      BenefitCostType @default(MENSAL)
+  companyCost   Decimal?        @db.Decimal(10, 2) // por mês (MENSAL) ou por dia (POR_DIA)
+  dependentCost Decimal?        @db.Decimal(10, 2) // por dependente, quando houver
+  discountType  DiscountType    @default(NENHUM)
+  discountValue Decimal?        @db.Decimal(10, 2) // R$ (FIXO) ou % (PERCENTUAL_SALARIO)
+  allUnits      Boolean         @default(true) // falso = só nas unidades listadas (ex.: farmácia)
+  valueSource   String? // origem do valor (ex.: "Tabela da operadora 03/2026")
+  active        Boolean         @default(true)
+  updatedById   String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  units       BenefitUnit[]
+  enrollments EmployeeBenefit[]
+}
+
+/// Disponibilidade por unidade e valor específico da unidade (opcional).
+model BenefitUnit {
+  id          String   @id @default(cuid())
+  benefitId   String
+  benefit     Benefit  @relation(fields: [benefitId], references: [id])
+  unitId      String
+  unit        Unit     @relation(fields: [unitId], references: [id])
+  companyCost Decimal? @db.Decimal(10, 2)
+
+  @@unique([benefitId, unitId])
+}
+
+model EmployeeBenefit {
+  id           String    @id @default(cuid())
+  employeeId   String
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  benefitId    String
+  benefit      Benefit   @relation(fields: [benefitId], references: [id])
+  startDate    DateTime
+  endDate      DateTime?
+  companyCost  Decimal?  @db.Decimal(10, 2) // valor individual (ex.: tarifa diária do VT do colaborador)
+  daysPerMonth Int?
+  dependents   Int       @default(0)
+  note         String?
+  createdById  String
+  createdAt    DateTime  @default(now())
+
+  @@index([employeeId])
+  @@index([benefitId])
+}
+
+/// Encargos sobre a folha. Sem alíquota cadastrada o encargo não é calculado (nunca estimado).
+model ChargeRate {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  label       String
+  ratePct     Decimal? @db.Decimal(7, 4)
+  legalRef    String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(100)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
+/// Regras do Elogio Premiado (vigência; vale a mais recente até a competência).
+model ElogioRule {
+  id                String   @id @default(cuid())
+  amountPerElogio   Decimal  @db.Decimal(10, 2)
+  maxPerMonth       Int? // quantos elogios contam por mês
+  maxAmountPerMonth Decimal? @db.Decimal(10, 2)
+  sources           String[] @default([]) // vazio = todas as origens
+  effectiveFrom     DateTime
+  notes             String?
+  createdById       String
+  createdAt         DateTime @default(now())
+}
+
+enum ElogioStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
+model Elogio {
+  id           String       @id @default(cuid())
+  employeeId   String
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+  date         DateTime
+  source       String // ex.: Booking, Google, TripAdvisor, livro de hóspedes, pesquisa interna
+  reference    String? // nº da avaliação / reserva
+  description  String?
+  status       ElogioStatus @default(PENDENTE)
+  rejectReason String?
+  decidedById  String?
+  decidedAt    DateTime?
+  createdById  String
+  createdAt    DateTime     @default(now())
+
+  @@index([employeeId, date])
+}
+
+enum PprStatus {
+  RASCUNHO
+  APURADO
+  PAGO
+}
+
+enum PprDistribution {
+  IGUAL
+  PROPORCIONAL_SALARIO
+}
+
+/// Programa de Participação nos Resultados — totalmente parametrizável.
+model PprProgram {
+  id                String          @id @default(cuid())
+  name              String
+  periodStart       DateTime
+  periodEnd         DateTime
+  poolAmount        Decimal?        @db.Decimal(14, 2) // montante a distribuir com 100% das metas
+  maxAchievementPct Int             @default(100) // teto de atingimento considerado por meta
+  minFactorPct      Int             @default(0) // gatilho: abaixo deste atingimento ponderado, nada é pago
+  distribution      PprDistribution @default(IGUAL)
+  minMonths         Int             @default(0)
+  prorate           Boolean         @default(true)
+  unitId            String? // vazio = todas as unidades
+  status            PprStatus       @default(RASCUNHO)
+  notes             String?
+  createdById       String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  goals PprGoal[]
+}
+
+model PprGoal {
+  id             String     @id @default(cuid())
+  programId      String
+  program        PprProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  name           String
+  weightPct      Decimal    @db.Decimal(6, 2)
+  target         String?
+  achievementPct Decimal?   @db.Decimal(6, 2) // apurado; vazio = não apurado
+  sortOrder      Int        @default(0)
+}
+
+enum MarketSource {
+  CONCORRENTE
+  ANUNCIO_VAGA
+  PESQUISA_SETORIAL
+  SINDICATO
+  CANDIDATO
+  OUTRO
+}
+
+/// Inteligência de mercado: salários de concorrentes e outros hotéis do Rio (registro manual, com fonte).
+model MarketSalary {
+  id            String       @id @default(cuid())
+  positionId    String
+  position      Position     @relation(fields: [positionId], references: [id])
+  companyName   String
+  hotelCategory String? // econômico, midscale, upscale, luxo
+  region        String? // bairro/região
+  source        MarketSource
+  baseSalary    Decimal?     @db.Decimal(10, 2) // salário-base
+  totalComp     Decimal?     @db.Decimal(10, 2) // remuneração total informada (não comparar com base)
+  benefits      String[]     @default([])
+  collectedAt   DateTime
+  reference     String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime     @default(now())
+
+  @@index([positionId])
 }
