@@ -22,7 +22,8 @@
     "vercel-build": "tsx scripts/check-env.ts && prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build",
     "test:e2e:first-access": "node tests/e2e/first-access.cjs",
     "test:e2e:recrutamento": "node tests/e2e/recruitment.mjs",
-    "test:e2e:comunicacao": "node tests/e2e/comms.mjs"
+    "test:e2e:comunicacao": "node tests/e2e/comms.mjs",
+    "test:e2e:indicadores": "node tests/e2e/dashboard.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -37,6 +38,7 @@
     "next-auth": "^5.0.0-beta.31",
     "nodemailer": "^7.0.13",
     "papaparse": "^5.5.3",
+    "pdfkit": "^0.15.2",
     "prisma": "^5.22.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -50,6 +52,7 @@
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.2",
     "@types/papaparse": "^5.5.2",
+    "@types/pdfkit": "^0.17.7",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/smtp-server": "^3.5.13",

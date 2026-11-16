@@ -30,6 +30,6 @@ export const NAVIGATION: Array<{
   { href: "/remuneracao", label: "Remuneração", icon: "money", permission: "remuneracao.view", ready: false, group: "remuneracao", phase: "Fase 4 — Remuneração", description: "Faixas salariais por cargo e nível, simulações de mérito e promoção." },
   { href: "/pesquisa-salarial", label: "Pesquisa salarial", icon: "chart", permission: "pesquisa_salarial.view", ready: false, group: "remuneracao", phase: "Fase 4 — Remuneração", description: "Comparação com o mercado hoteleiro do Rio de Janeiro por cargo do catálogo corporativo." },
   { href: "/cargos", label: "Cargos e carreira", icon: "ladder", permission: "carreira.view", ready: true, group: "gestao", description: "Catálogo corporativo de cargos e trilhas de carreira." },
-  { href: "/relatorios", label: "Relatórios", icon: "report", permission: "relatorios.view", ready: false, group: "gestao", phase: "Fase 5 — Indicadores", description: "Indicadores de headcount, turnover, tempo de contratação e custo por contratação." },
+  { href: "/relatorios", label: "Relatórios", icon: "report", permission: "relatorios.view", ready: true, group: "gestao", description: "Dashboard gerencial: recrutamento, conversão, produtividade e SLA." },
   { href: "/configuracoes", label: "Configurações", icon: "gear", permission: "configuracoes.view", ready: true, group: "gestao", description: "Estrutura organizacional, usuários, permissões, auditoria e sistema." },
 ];

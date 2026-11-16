@@ -4,7 +4,9 @@ Plataforma web interna da **Riale Hotéis** (Brisa Barra, Imperial e Vilamar). E
 construída para receber, em fases, os módulos de recrutamento, admissão, remuneração,
 indicadores e carreira.
 
-> **Fase atual: 3 — Comunicação automática com gestores** (aviso consolidado de agenda,
+> **Fase atual: 4 — Painel gerencial e indicadores de RH** (recrutamento, conversão com
+> denominadores explícitos, produtividade, SLA por responsável com metas, filtros e exportação
+> Excel/PDF — ver [`docs/INDICADORES.md`](docs/INDICADORES.md)), sobre a **Fase 3 — Comunicação automática com gestores** (aviso consolidado de agenda,
 > fechamento diário às 18h30, retificações, fila com novas tentativas — ver
 > [`docs/COMUNICACAO.md`](docs/COMUNICACAO.md)), sobre a **Fase 2 — Recrutamento e seleção** (vagas, candidatos, agenda de entrevistas,
 > resultados, aprovação do gestor, histórico e importação da planilha do RH — ver
@@ -123,11 +125,16 @@ Senha de todos: **`Riale@2026Seguro`**
 | `npm run test:e2e` | Navegador real (Playwright) contra o servidor rodando: login, perfis, cadastros, validação, LGPD, documentos, recuperação de senha, bloqueio, responsividade |
 | `npm run test:e2e:recrutamento` | Fluxo completo no navegador: vaga → candidatos (duplicidade) → agendamento em lote → resultado → decisão do gestor → histórico → importação da planilha |
 | `npm run test:e2e:comunicacao` | Navegador: revisão/edição do aviso, encerramento manual do dia, painel de configuração, proteção do cron |
+| `npm run test:e2e:indicadores` | Navegador: painel, filtros, tela × Excel exportado, PDF, metas de SLA, escopo do gestor, celular |
 | `npm run test:e2e:first-access` | Banco de produção vazio: primeiro acesso (CPF + código), cadastro dos demais usuários, troca obrigatória de senha |
 
 O E2E exige o servidor no ar (`npm start`) e o Playwright instalado
 (`npm i -D playwright && npx playwright install chromium`). Capturas de tela ficam em
 `tests/e2e/screenshots/`.
+
+**Resultado na entrega da Fase 4:** 14/14 unitários; 38/38 de integração (30 anteriores + 8 de
+indicadores conferidos com registros conhecidos); E2E 15/15 (Fase 1), 7/7 (recrutamento), 4/4
+(comunicação) e 7/7 (indicadores), sobre banco recriado do zero.
 
 **Resultado na entrega da Fase 3:** 14/14 unitários; 30/30 de integração (17 anteriores + 13 de
 comunicação, com SMTP real até um servidor local); E2E 15/15 (Fase 1), 7/7 (recrutamento) e 4/4

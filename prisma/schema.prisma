@@ -179,6 +179,7 @@ model Position {
   movementsFrom         MovementHistory[]    @relation("MovementFrom")
   movementsTo           MovementHistory[]    @relation("MovementTo")
   managers              Manager[]
+  SlaTarget             SlaTarget[]
 
   @@unique([title])
 }
@@ -512,6 +513,11 @@ model Application {
   externalCheckStatus ExternalCheckStatus @default(NAO_APLICA)
   externalCheckNote   String?
   notes               String?             @db.Text
+  /// Aprovação final (RH + gestor + avaliação externa, quando houver) — base dos SLAs
+  approvedAt          DateTime?
+  /// Admissão (data de início do colaborador) registrada pelo RH
+  hiredAt             DateTime?
+  hiredById           String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
@@ -657,6 +663,32 @@ model CandidateEvent {
   createdAt     DateTime           @default(now())
 
   @@index([candidateId, occurredAt])
+}
+
+// ───────────────────────── METAS DE SLA (Fase 4) ─────────────────────────
+
+/// Etapas medidas. Cada etapa tem um "dono" (RH, gestor, admissão) — nunca são somadas entre donos.
+enum SlaStage {
+  ABERTURA_PRIMEIRA_ENTREVISTA // RH
+  ENTREVISTA_APROVACAO_RH // RH
+  APROVACAO_RH_GESTOR // Gestor
+  APROVACAO_ADMISSAO // RH/Admissão
+  ABERTURA_CONTRATACAO // ponta a ponta (indicador de resultado, não atribuível)
+}
+
+/// Meta em dias por etapa. Mais específica vence: cargo+departamento > cargo > departamento > padrão.
+model SlaTarget {
+  id             String    @id @default(cuid())
+  stage          SlaStage
+  positionId     String?
+  position       Position? @relation(fields: [positionId], references: [id])
+  departmentName String? // aplica ao departamento de mesmo nome em todas as unidades
+  targetDays     Float
+  updatedById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([stage, positionId, departmentName])
 }
 
 // ───────────────────────── IMPORTAÇÃO DA PLANILHA ─────────────────────────

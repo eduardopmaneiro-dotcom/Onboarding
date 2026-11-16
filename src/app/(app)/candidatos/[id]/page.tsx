@@ -10,7 +10,8 @@ import { APP_STATUS_LABEL, APP_STATUS_TONE, BENEFITS, DECISION_LABEL, EXTERNAL_L
 import { ActionForm, Field, SelectField, Submit, TextAreaField } from "@/components/forms";
 import { ResultPanel } from "@/components/recruitment/result-panel";
 import { Badge, Card, PageHeader } from "@/components/ui";
-import { addApplicationAction, externalCheckAction, resultAction, saveSalaryAction, updateCandidateAction } from "../../recrutamento/actions";
+import { addApplicationAction, externalCheckAction, hireAction, resultAction, saveSalaryAction, updateCandidateAction } from "../../recrutamento/actions";
+import { fmtDate, todayKey } from "@/lib/datetime";
 
 export const metadata = { title: "Candidato" };
 
@@ -130,6 +131,15 @@ export default async function CandidatePage({ params, searchParams }: { params: 
                     <ResultPanel action={resultAction} interviewId={iv.id} reasons={reasons} benefits={BENEFITS} showSalary={c.showSalary} defaultOffer={a.jobOpening.expectedSalary ? Number(a.jobOpening.expectedSalary).toFixed(2).replace(".", ",") : null} />
                   </div>
                 ))}
+
+                {manage && a.status === "APROVADO" && (
+                  <ActionForm action={hireAction} className="mt-4 flex flex-wrap items-end gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <input type="hidden" name="applicationId" value={a.id} />
+                    <div><label className="label" htmlFor={`hire-${a.id}`}>Aprovação final{a.approvedAt ? ` em ${fmtDate(a.approvedAt)}` : ""} — data de admissão</label><input id={`hire-${a.id}`} type="date" name="date" defaultValue={todayKey()} className="input" /></div>
+                    <Submit className="btn-primary" pendingText="…">Registrar admissão</Submit>
+                  </ActionForm>
+                )}
+                {a.status === "CONTRATADO" && a.hiredAt && <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Admitido(a) em {fmtDate(a.hiredAt)}.</p>}
 
                 {c.showSalary && (
                   <details className="mt-4 rounded-lg border border-stone-200" open={!!(a.offeredSalary || a.expectedSalary)}>

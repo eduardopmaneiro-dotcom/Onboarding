@@ -24,7 +24,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
-  serverExternalPackages: ["bcryptjs"],
+  serverExternalPackages: ["bcryptjs", "pdfkit", "exceljs", "nodemailer"],
+  // pdfkit lê as fontes padrão (.afm) do disco em tempo de execução — garante que vão no deploy
+  outputFileTracingIncludes: { "/api/v1/reports/pdf": ["./node_modules/pdfkit/js/data/**/*"] },
   experimental: { serverActions: { bodySizeLimit: "12mb" } },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

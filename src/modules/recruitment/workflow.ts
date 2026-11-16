@@ -153,6 +153,16 @@ function deriveStatus(rh: InterviewResult, ext: ExternalCheckStatus, mgr: Manage
   return "AGUARDANDO_GESTOR";
 }
 
+/** Atualiza a situação; ao virar APROVADO pela primeira vez, registra a data da aprovação final (SLA). */
+async function setStatus(tx: Tx, applicationId: string, status: ApplicationStatus) {
+  const cur = await tx.application.findUniqueOrThrow({ where: { id: applicationId }, select: { approvedAt: true, status: true } });
+  if (cur.status === "CONTRATADO") return; // admissão registrada não é desfeita por recálculo
+  await tx.application.update({
+    where: { id: applicationId },
+    data: { status, approvedAt: status === "APROVADO" ? (cur.approvedAt ?? new Date()) : cur.approvedAt },
+  });
+}
+
 async function latestDecision(tx: Tx, applicationId: string) {
   const r = await tx.managerReview.findFirst({ where: { applicationId }, orderBy: { requestedAt: "desc" } });
   return r?.status ?? null;
@@ -233,7 +243,7 @@ export async function registerResult(user: CurrentUser, interviewId: string, raw
     }
     const app = await tx.application.findUniqueOrThrow({ where: { id: iv.applicationId } });
     const mgr = data.result === "APROVADO" ? await latestDecision(tx, iv.applicationId) : null;
-    await tx.application.update({ where: { id: iv.applicationId }, data: { status: deriveStatus(data.result, app.externalCheckStatus, mgr) } });
+    await setStatus(tx, iv.applicationId, deriveStatus(data.result, app.externalCheckStatus, mgr));
   });
   await recordAudit({ entityType: "Interview", entityId: iv.id, action: "UPDATE", actorId: user.id, actorRole: user.role, previousValue: { result: iv.result }, newValue: { result: data.result, reasonId: data.reasonId } });
 }
@@ -247,7 +257,7 @@ export async function setExternalCheck(user: CurrentUser, applicationId: string,
     await tx.application.update({ where: { id: applicationId }, data: { externalCheckStatus: status, externalCheckNote: note ?? null } });
     const rh = app.interviews[0]?.result ?? "PENDENTE";
     const mgr = await latestDecision(tx, applicationId);
-    await tx.application.update({ where: { id: applicationId }, data: { status: deriveStatus(rh, status, mgr) } });
+    await setStatus(tx, applicationId, deriveStatus(rh, status, mgr));
     await recordEvent(tx, { candidateId: app.candidateId, applicationId, type: "AVALIACAO_EXTERNA", summary: `Avaliação externa: ${EXTERNAL_LABEL[status]}${note ? ` · ${note}` : ""}`, actorUserId: user.id });
   });
 }
@@ -283,7 +293,7 @@ export async function decideReview(user: CurrentUser, reviewId: string, raw: unk
     });
     const app = review.application;
     const rh = app.interviews[0]?.result ?? "APROVADO";
-    await tx.application.update({ where: { id: app.id }, data: { status: deriveStatus(rh, app.externalCheckStatus, data.decision) } });
+    await setStatus(tx, app.id, deriveStatus(rh, app.externalCheckStatus, data.decision));
     await recordEvent(tx, {
       candidateId: app.candidateId,
       applicationId: app.id,
@@ -402,4 +412,31 @@ export async function listReasons(includeInactive = false) {
 
 export async function listInterviewers() {
   return prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true } });
+}
+
+// ═════════════════════════ ADMISSÃO (registro mínimo para os indicadores) ═════════════════════════
+
+const hireInput = z.object({ date: z.string({ error: "Informe a data de admissão" }).regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida") });
+
+/**
+ * Registra a admissão de um candidato aprovado (data de início). Quando o número de admitidos
+ * atinge a quantidade de vagas, a vaga é encerrada como PREENCHIDA.
+ */
+export async function registerHire(user: CurrentUser, applicationId: string, raw: unknown) {
+  assertCan(user, "recrutamento.manage");
+  const { date } = hireInput.parse(raw);
+  const app = await prisma.application.findFirst({ where: { id: applicationId, jobOpening: jobScopeWhere(user) }, include: { jobOpening: { include: { position: true } } } });
+  if (!app) throw new NotFoundError("Candidatura não encontrada");
+  if (app.status !== "APROVADO") throw new ValidationError("Só é possível registrar admissão de candidato com aprovação final (RH, gestor e avaliação externa, quando houver)");
+  const hiredAt = localToDate(date, "08:00");
+  if (app.approvedAt && hiredAt < new Date(app.approvedAt.getTime() - 86_400_000)) throw new ValidationError("A admissão não pode ser anterior à aprovação", { date: ["Data anterior à aprovação"] });
+  await prisma.$transaction(async (tx) => {
+    await tx.application.update({ where: { id: app.id }, data: { status: "CONTRATADO", hiredAt, hiredById: user.id } });
+    await recordEvent(tx, { candidateId: app.candidateId, applicationId: app.id, type: "STATUS", summary: `Admissão registrada para ${fmtDateTime(hiredAt, false)} (${app.jobOpening.position.title})`, actorUserId: user.id });
+    const hired = await tx.application.count({ where: { jobOpeningId: app.jobOpeningId, status: "CONTRATADO" } });
+    if (hired >= app.jobOpening.headcount && ["ABERTA", "PAUSADA"].includes(app.jobOpening.status)) {
+      await tx.jobOpening.update({ where: { id: app.jobOpeningId }, data: { status: "PREENCHIDA", closedAt: hiredAt } });
+    }
+  });
+  await recordAudit({ entityType: "Application", entityId: app.id, action: "STATUS_CHANGE", actorId: user.id, actorRole: user.role, newValue: { status: "CONTRATADO", hiredAt } });
 }
