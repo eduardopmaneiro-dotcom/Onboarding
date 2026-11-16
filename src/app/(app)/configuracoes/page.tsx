@@ -14,6 +14,7 @@ const SETTINGS_SECTIONS: Array<{ href: string; label: string; description: strin
   { href: "/configuracoes/permissoes", label: "Permissões", description: "Matriz de permissões por perfil.", permission: "permissions.manage" },
   { href: "/configuracoes/auditoria", label: "Auditoria", description: "Trilha imutável de ações, acessos e dados pessoais consultados.", permission: "audit.view" },
   { href: "/configuracoes/motivos", label: "Motivos de reprovação", description: "Lista padronizada usada no registro de resultados.", permission: "settings.manage" },
+  { href: "/configuracoes/importar-dados", label: "Importar dados da empresa", description: "Carga de cargos e descritivos, quadro, salários, folha, encargos e clínica (planilha padronizada).", permission: "dados.importar" },
   { href: "/configuracoes/sistema", label: "Sistema e LGPD", description: "Parâmetros gerais, retenção de dados, notificações e backups.", permission: "settings.manage" },
 ];
 

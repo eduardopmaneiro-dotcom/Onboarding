@@ -13,14 +13,16 @@ const ALLOWED_MIME: Record<string, string[]> = {
   "image/jpeg": [".jpg", ".jpeg"],
   "image/png": [".png"],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
 };
-const OWNER_TYPES = ["Employee", "Candidate", "Manager", "JobOpening", "AdmissionDocument", "MedicalExam", "JobDescription"] as const;
+const OWNER_TYPES = ["Employee", "Candidate", "Manager", "JobOpening", "AdmissionDocument", "MedicalExam", "JobDescription", "DataImport"] as const;
 /** Documentos admissionais: acesso restrito (permissão própria + escopo da unidade do processo). */
 const RESTRICTED: Record<string, (ownerId: string) => Promise<string | null>> = {
   AdmissionDocument: async (id) => (await prisma.admissionDocument.findUnique({ where: { id }, select: { admission: { select: { department: { select: { unitId: true } } } } } }))?.admission.department.unitId ?? null,
   MedicalExam: async (id) => (await prisma.medicalExam.findUnique({ where: { id }, select: { admission: { select: { department: { select: { unitId: true } } } } } }))?.admission.department.unitId ?? null,
 };
 async function assertRestrictedAccess(actor: CurrentUser, ownerType: string, ownerId: string) {
+  if (ownerType === "DataImport") { assertCan(actor, "dados.importar"); return; } // carga com dados pessoais: só quem importa
   const resolve = RESTRICTED[ownerType];
   if (!resolve) return;
   assertCan(actor, "admissoes.documentos");
@@ -49,9 +51,11 @@ export async function storeDocument(
   if (input.file.size === 0) throw new ValidationError("Arquivo vazio");
   if (input.file.size > maxMb * 1024 * 1024) throw new ValidationError(`Arquivo acima de ${maxMb} MB`);
   const buf = Buffer.from(await input.file.arrayBuffer());
-  const mime = sniff(buf);
   const ext = path.extname(input.file.name).toLowerCase();
-  if (!mime || !ALLOWED_MIME[mime]?.includes(ext)) throw new ValidationError("Formato não permitido (PDF, JPG, PNG ou DOCX)");
+  let mime = sniff(buf);
+  // DOCX e XLSX são ZIP (mesma assinatura): a extensão decide entre os dois
+  if (mime?.includes("wordprocessingml") && ext === ".xlsx") mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  if (!mime || !ALLOWED_MIME[mime]?.includes(ext)) throw new ValidationError("Formato não permitido (PDF, JPG, PNG, DOCX ou XLSX)");
 
   const storageKey = `db:${randomToken(18)}`;
   const doc = await prisma.document.create({

@@ -170,8 +170,9 @@ export function totalCompensation(i: CompInput) {
   for (const b of i.benefits) if (b.missing) partial.push(b.missing);
   // encargos: CLT; base = salário (pago ou contratual) + rubricas com incidência (prêmios e PPR não incidem)
   const chargeBase = r2(salary + i.items.filter((x) => x.category !== "BASE_PAGO" && x.chargeable).reduce((s, x) => s + x.amount, 0));
-  const ch = i.contractType === "CLT" ? charges(i.rates, chargeBase) : { total: 0, items: [], missing: [] as string[] };
-  if (i.contractType === "CLT" && ch.total === null) partial.push("Encargos: nenhuma alíquota cadastrada");
+  const payroll = i.contractType === "CLT" || i.contractType === "APRENDIZ"; // encargos de folha
+  const ch = payroll ? charges(i.rates, chargeBase) : { total: 0, items: [], missing: [] as string[] };
+  if (payroll && ch.total === null) partial.push("Encargos: nenhuma alíquota cadastrada");
   else if (ch.missing.length) partial.push(`Encargos sem alíquota: ${ch.missing.join(", ")}`);
   const total = r2(cash + benNet);
   return {

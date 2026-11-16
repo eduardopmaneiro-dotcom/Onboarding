@@ -26,7 +26,7 @@ async function Flow({ p, showSalary }: { p: Path; showSalary: boolean }) {
           <div className="w-52 rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
             <div className="flex items-start justify-between gap-1">
               <Link href={`/cargos/${s.positionId}`} className="font-medium leading-tight text-riale-900 hover:underline">{s.position.title}</Link>
-              <Badge tone={s.position.isLeadership ? "gold" : "blue"}>{s.position.level}</Badge>
+              <Badge tone={s.position.isLeadership ? "gold" : "blue"}>{s.position.levelConfirmed ? s.position.level : "nível ?"}</Badge>
             </div>
             <p className="mt-1 text-[11px] text-stone-500">{s.position._count.employees} colaborador(es){showSalary && bands[i] ? ` · ref. ${brl(bands[i]!.ref)}` : ""}</p>
             {i > 0 && (

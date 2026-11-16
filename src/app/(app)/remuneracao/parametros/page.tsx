@@ -4,14 +4,15 @@ import { PAY_CATEGORY_LABEL } from "@/modules/compensation/constants";
 import { ActionForm, CheckboxField, Field, SelectField, Submit } from "@/components/forms";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { RemTabs } from "@/components/rem-tabs";
-import { payTypeAction, rateAction } from "../actions";
+import { payTypeAction, rateAction, rateUnitAction } from "../actions";
+import { prisma } from "@/lib/prisma";
 
 export const metadata = { title: "Encargos e rubricas" };
 export const dynamic = "force-dynamic";
 
 export default async function ParamsPage() {
   const user = await requirePermission("remuneracao.view");
-  const [rates, types] = await Promise.all([listRates(), listPayItemTypes(true)]);
+  const [rates, types, units] = await Promise.all([listRates(), listPayItemTypes(true), prisma.unit.findMany({ where: { active: true }, orderBy: { name: "asc" } })]);
   const config = can(user, "remuneracao.config") && (user.role === "ADMIN" || !user.unitId);
   const total = rates.filter((r) => r.active && r.ratePct !== null).reduce((s, r) => s + Number(r.ratePct), 0);
   const cats = Object.entries(PAY_CATEGORY_LABEL).map(([value, label]) => ({ value, label }));
@@ -25,12 +26,20 @@ export default async function ParamsPage() {
             {rates.map((r) => (
               <li key={r.id} className="rounded-lg border border-stone-200 p-3 text-sm">
                 {config ? (
-                  <ActionForm action={rateAction} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_110px_auto] sm:items-end">
+                  <>
+                  <ActionForm action={rateAction} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_100px_100px_auto] sm:items-end">
                     <input type="hidden" name="id" value={r.id} /><input type="hidden" name="label" value={r.label} /><input type="hidden" name="legalRef" value={r.legalRef ?? ""} />
                     <div><p className="font-medium text-riale-900">{r.label}</p><p className="text-xs text-stone-500">{r.legalRef}</p></div>
                     <Field name="ratePct" label="Alíquota (%)" inputMode="decimal" defaultValue={r.ratePct === null ? "" : String(Number(r.ratePct)).replace(".", ",")} placeholder="não informada" />
+                    <Field name="apprenticeRatePct" label="Aprendiz (%)" inputMode="decimal" defaultValue={r.apprenticeRatePct === null ? "" : String(Number(r.apprenticeRatePct)).replace(".", ",")} placeholder="igual" />
                     <div className="flex items-center gap-2"><CheckboxField name="active" label="Ativo" defaultChecked={r.active} /><Submit className="btn-ghost btn-sm" pendingText="…">Salvar</Submit></div>
                   </ActionForm>
+                  <details className="mt-2"><summary className="cursor-pointer text-xs text-gold-600">Por unidade{r.units.length ? `: ${r.units.map((u) => `${u.unit.name} ${String(Number(u.ratePct)).replace(".", ",")}%`).join(" · ")}` : " (usa a geral)"}</summary>
+                    <div className="mt-2 space-y-1">{units.map((u) => { const cur = r.units.find((x) => x.unitId === u.id); return (
+                      <ActionForm key={u.id} action={rateUnitAction} className="flex items-center gap-2 text-xs"><input type="hidden" name="rateId" value={r.id} /><input type="hidden" name="unitId" value={u.id} /><span className="w-24">{u.name}</span><input name="ratePct" defaultValue={cur ? String(Number(cur.ratePct)).replace(".", ",") : ""} placeholder="geral" className="input w-24 py-1 text-xs" aria-label={`${r.label} — ${u.name}`} /><Submit className="btn-ghost btn-sm" pendingText="…">ok</Submit></ActionForm>
+                    ); })}</div>
+                  </details>
+                  </>
                 ) : <p>{r.label}: {r.ratePct === null ? "não informada" : `${Number(r.ratePct)}%`}</p>}
               </li>
             ))}

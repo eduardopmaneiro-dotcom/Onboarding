@@ -86,7 +86,7 @@ export default async function AdmissionPage({ params }: { params: Promise<{ id: 
                 <SelectField name="departmentId" label="Departamento (unidade)" defaultValue={a.departmentId} options={departments.map((d) => ({ value: d.id, label: `${d.name} — ${d.unit.name}` }))} />
                 <SelectField name="managerId" label="Gestor" placeholder="—" defaultValue={a.managerId ?? ""} options={managers.map((m) => ({ value: m.id, label: `${m.name} (${m.department.name})` }))} />
                 {a.showSalary && <Field name="salary" label="Salário (R$)" inputMode="decimal" defaultValue={money(a.salary)} />}
-                <SelectField name="contractType" label="Contrato" defaultValue={a.contractType} options={[{ value: "CLT", label: "CLT" }, { value: "PJ", label: "PJ" }, { value: "ESTAGIO", label: "Estágio" }, { value: "TEMPORARIO", label: "Temporário" }]} />
+                <SelectField name="contractType" label="Contrato" defaultValue={a.contractType} options={[{ value: "CLT", label: "CLT" }, { value: "PJ", label: "PJ" }, { value: "ESTAGIO", label: "Estágio" }, { value: "TEMPORARIO", label: "Temporário" }, { value: "APRENDIZ", label: "Aprendiz" }]} />
                 <SelectField name="schedule" label="Escala" placeholder="—" defaultValue={a.schedule ?? ""} options={Object.entries(SCHEDULE_LABEL).map(([value, label]) => ({ value, label }))} />
                 <SelectField name="shift" label="Turno" placeholder="—" defaultValue={a.shift ?? ""} options={Object.entries(SHIFT_LABEL).map(([value, label]) => ({ value, label }))} />
                 <Field name="workHours" label="Horário" placeholder="07:00–15:20" defaultValue={a.workHours ?? ""} />

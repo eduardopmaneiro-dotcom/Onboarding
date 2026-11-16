@@ -154,7 +154,7 @@ export async function registerMovement(user: CurrentUser, employeeId: string, ra
   if (user.role === "RH" && user.unitId && toDept.unitId !== user.unitId) throw new ValidationError("Destino fora da sua unidade — peça ao RH corporativo", { toDepartmentId: ["Fora da unidade"] });
   if (d.type === "PROMOCAO") {
     const inPath = (await nextStepsFrom(e.positionId)).some((p) => p.next?.positionId === toPositionId);
-    const higher = Number(toPos.level.slice(1)) > Number(e.position.level.slice(1));
+    const higher = toPos.levelConfirmed && e.position.levelConfirmed && Number(toPos.level.slice(1)) > Number(e.position.level.slice(1));
     if (!inPath && !higher) throw new ValidationError("Promoção exige cargo de nível superior ou o próximo passo de uma trilha vigente — use “mudança de cargo”", { toPositionId: ["Não é promoção"] });
   }
   if (d.newSalary !== null) {

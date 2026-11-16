@@ -37,7 +37,7 @@ export default async function PositionPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <PageHeader title={d.position.title} subtitle={`${d.position.level} · ${d.position.careerTrack?.name ?? "sem família ocupacional"} · ${d.employees} colaborador(es) ativo(s)`} breadcrumb={{ href: "/cargos", label: "Cargos e carreira" }} actions={<div className="flex gap-2">{d.position.isLeadership && <Badge tone="gold">liderança</Badge>}{cur ? <Badge tone="green">descritivo vigente v{cur.version}</Badge> : <Badge>sem descritivo vigente</Badge>}</div>} />
+      <PageHeader title={d.position.title} subtitle={`${d.position.levelConfirmed ? d.position.level : "nível a definir"}${d.position.cbo ? ` · CBO ${d.position.cbo}` : ""} · ${d.position.careerTrack?.name ?? "sem família ocupacional"} · ${d.employees} colaborador(es) ativo(s)`} breadcrumb={{ href: "/cargos", label: "Cargos e carreira" }} actions={<div className="flex gap-2">{d.position.isLeadership && <Badge tone="gold">liderança</Badge>}{cur ? <Badge tone="green">descritivo vigente v{cur.version}</Badge> : <Badge>sem descritivo vigente</Badge>}</div>} />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
           <Card title={cur ? `Descritivo vigente — v${cur.version} desde ${fmtDate(cur.effectiveFrom)}` : "Descritivo"}>
@@ -47,7 +47,7 @@ export default async function PositionPage({ params }: { params: Promise<{ id: s
                 <List title="Responsabilidades" items={cur.responsibilities} />
                 <div className="grid gap-4 rounded-lg border border-riale-200 bg-riale-50/60 p-4 md:grid-cols-2">
                   <div className="md:col-span-2"><p className="text-sm font-semibold text-riale-900">Requisitos mínimos — obrigatórios para ocupar o cargo</p></div>
-                  <List title="Requisitos" items={cur.minRequirements} tone="must" />
+                  <List title="Requisitos" items={cur.minRequirements} tone="must" empty="Não informados no documento institucional" />
                   <div className="space-y-3">
                     <div><p className="text-xs font-semibold uppercase tracking-wide text-riale-900">Escolaridade</p><p className="text-sm">{cur.education ? EDUCATION_LABEL[cur.education] : "—"}{cur.educationNote ? ` — ${cur.educationNote}` : ""}</p></div>
                     <div><p className="text-xs font-semibold uppercase tracking-wide text-riale-900">Experiência</p><p className="text-sm">{cur.minExperienceMonths !== null ? `${cur.minExperienceMonths} meses` : "—"}{cur.experienceNote ? ` — ${cur.experienceNote}` : ""}</p></div>
@@ -63,6 +63,7 @@ export default async function PositionPage({ params }: { params: Promise<{ id: s
                   <div><p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Superior direto</p>{cur.reportsTo ? <Link href={`/cargos/${cur.reportsTo.id}`} className="text-riale-900 hover:underline">{cur.reportsTo.title}</Link> : "—"}</div>
                   <div><p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Subordinados</p>{d.subordinates.length ? d.subordinates.map((s) => <Link key={s.id} href={`/cargos/${s.id}`} className="mr-2 text-riale-900 hover:underline">{s.title}</Link>) : <span className="text-stone-400">nenhum descritivo vigente aponta este cargo como superior</span>}</div>
                 </div>
+                {cur.behavioralProfile && <p className="text-xs text-stone-500">Perfil comportamental (relatório institucional): <span className="font-medium">{cur.behavioralProfile}</span></p>}
                 <p className="text-xs text-stone-400">Origem: {cur.sourceRef}</p>
               </div>
             )}

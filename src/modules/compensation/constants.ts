@@ -44,6 +44,9 @@ export const DEFAULT_PAY_TYPES: Array<{ code: string; label: string; category: P
   { code: "TAXA_SERVICO", label: "Taxa de serviço (gorjeta)", category: "VARIAVEL", chargeable: true },
   { code: "COMISSAO", label: "Comissão", category: "VARIAVEL", chargeable: true },
   { code: "PREMIO", label: "Prêmio / bonificação", category: "PREMIACAO", chargeable: false },
+  { code: "FERIADO", label: "Feriado trabalhado", category: "ADICIONAL", chargeable: true },
+  { code: "SALARIO_SUBSTITUICAO", label: "Salário substituição", category: "ADICIONAL", chargeable: true },
+  { code: "ELOGIO_PAGO_FOLHA", label: "Elogio Premiado (pago na folha)", category: "PREMIACAO", chargeable: false },
   { code: "ELOGIO_PREMIADO", label: "Elogio Premiado", category: "PREMIACAO", chargeable: false, system: true },
   { code: "PPR", label: "PPR (Participação nos Resultados)", category: "PREMIACAO", chargeable: false, system: true },
 ];

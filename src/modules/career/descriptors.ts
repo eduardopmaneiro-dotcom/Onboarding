@@ -74,7 +74,8 @@ export async function publishDescriptor(user: CurrentUser, positionId: string, r
   const { effectiveFrom } = z.object({ effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).default(todayKey()) }).parse(raw ?? {});
   const draft = await prisma.jobDescription.findFirst({ where: { positionId, status: "RASCUNHO" } });
   if (!draft) throw new ValidationError("Não há rascunho para publicar");
-  const missing = [!draft.objective && "objetivo", !draft.responsibilities.length && "responsabilidades", !draft.minRequirements.length && "requisitos mínimos", !draft.sourceRef && "documento institucional de origem"].filter(Boolean);
+  // requisitos mínimos podem não constar do documento institucional: ficam como "não informados", nunca inventados
+  const missing = [!draft.objective && "objetivo", !draft.responsibilities.length && "responsabilidades", !draft.sourceRef && "documento institucional de origem"].filter(Boolean);
   if (missing.length) throw new ValidationError(`Para publicar, preencha: ${missing.join(", ")}`);
   await prisma.$transaction([
     prisma.jobDescription.updateMany({ where: { positionId, status: "VIGENTE" }, data: { status: "ARQUIVADO" } }),

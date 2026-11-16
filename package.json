@@ -26,7 +26,8 @@
     "test:e2e:indicadores": "node tests/e2e/dashboard.mjs",
     "test:e2e:admissao": "node tests/e2e/admission.mjs",
     "test:e2e:remuneracao": "node tests/e2e/compensation.mjs",
-    "test:e2e:carreira": "node tests/e2e/career.mjs"
+    "test:e2e:carreira": "node tests/e2e/career.mjs",
+    "test:e2e:carga": "node tests/e2e/dataimport.mjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

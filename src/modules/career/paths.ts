@@ -12,7 +12,7 @@ export async function listPaths(user: CurrentUser, opts: { includeDrafts?: boole
     orderBy: [{ status: "desc" }, { name: "asc" }],
     include: {
       family: { select: { id: true, name: true } },
-      steps: { orderBy: { order: "asc" }, include: { position: { select: { id: true, title: true, level: true, isLeadership: true, _count: { select: { employees: { where: { status: { not: "DESLIGADO" } } } } } } } } },
+      steps: { orderBy: { order: "asc" }, include: { position: { select: { id: true, title: true, level: true, levelConfirmed: true, isLeadership: true, _count: { select: { employees: { where: { status: { not: "DESLIGADO" } } } } } } } } },
     },
   });
 }

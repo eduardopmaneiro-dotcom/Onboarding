@@ -4,6 +4,9 @@ Plataforma web interna da **Riale Hotéis** (Brisa Barra, Imperial e Vilamar). E
 construída para receber, em fases, os módulos de recrutamento, admissão, remuneração,
 indicadores e carreira.
 
+> **Carga de dados da empresa** (cargos/descritivos do relatório institucional, quadro, salários, folha, encargos):
+> ver [`docs/CARGA-DADOS.md`](docs/CARGA-DADOS.md).
+>
 > **Fase atual: 7 — Estrutura organizacional e desenvolvimento de carreira** (descritivos versionados
 > com requisitos mínimos separados do PDI, plano de cargos e salários com faixas, trilhas visuais
 > configuráveis, banco de talentos por compatibilidade, portal do colaborador preparado e indicadores
@@ -138,6 +141,7 @@ Senha de todos: **`Riale@2026Seguro`**
 | `npm run test:e2e:admissao` | Navegador: candidato aprovado → admissão (dados, anexo, recusa, exame, ASO) → colaborador → marco → desligamento → permanência; escopo da gestora |
 | `npm run test:e2e:remuneracao` | Navegador: parcelas e custo total, lançamento com encargos, origem do valor do benefício, Elogio Premiado, PPR, mercado, acesso restrito |
 | `npm run test:e2e:carreira` | Navegador: trilha visual, descritivo (requisitos × PDI), publicação com origem, elegibilidade, PDI, portal, indicadores, banco de talentos, gestora |
+| `npm run test:e2e:carga` | Navegador: carga de dados da empresa (planilha sintética) — prévia, aplicação, acesso só do administrador |
 | `npm run test:e2e:first-access` | Banco de produção vazio: primeiro acesso (CPF + código), cadastro dos demais usuários, troca obrigatória de senha |
 
 O E2E exige o servidor no ar (`npm start`) e o Playwright instalado

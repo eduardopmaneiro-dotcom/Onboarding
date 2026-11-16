@@ -24,7 +24,7 @@ export default async function NewEmployeePage() {
           <CpfField />
           <Field name="internalId" label="Matrícula (opcional — vazio gera automática)" />
           <Field name="admissionDate" label="Data de admissão" type="date" max={todayKey()} />
-          <SelectField name="contractType" label="Contrato" options={[{ value: "CLT", label: "CLT" }, { value: "PJ", label: "PJ" }, { value: "ESTAGIO", label: "Estágio" }, { value: "TEMPORARIO", label: "Temporário" }]} />
+          <SelectField name="contractType" label="Contrato" options={[{ value: "CLT", label: "CLT" }, { value: "PJ", label: "PJ" }, { value: "ESTAGIO", label: "Estágio" }, { value: "TEMPORARIO", label: "Temporário" }, { value: "APRENDIZ", label: "Aprendiz" }]} />
           <SelectField name="positionId" label="Cargo" placeholder="Escolha…" options={positions.map((p) => ({ value: p.id, label: p.title }))} />
           <SelectField name="departmentId" label="Departamento (unidade)" placeholder="Escolha…" options={departments.map((d) => ({ value: d.id, label: `${d.name} — ${d.unit.name}` }))} />
           <SelectField name="managerId" label="Gestor" placeholder="—" options={managers.map((m) => ({ value: m.id, label: `${m.name} (${m.department.name})` }))} />

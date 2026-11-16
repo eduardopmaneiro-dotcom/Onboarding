@@ -80,7 +80,7 @@ const directInput = z.object({
   positionId: z.string({ error: "Cargo obrigatório" }).min(1, "Cargo obrigatório"),
   departmentId: z.string({ error: "Departamento obrigatório" }).min(1, "Departamento obrigatório"),
   managerId: z.string().optional(),
-  contractType: z.enum(["CLT", "PJ", "ESTAGIO", "TEMPORARIO"]).default("CLT"),
+  contractType: z.enum(["CLT", "PJ", "ESTAGIO", "TEMPORARIO", "APRENDIZ"]).default("CLT"),
   salary: z.string().optional(),
   schedule: z.enum(["SEIS_POR_UM", "CINCO_POR_DOIS", "DOZE_POR_TRINTA_E_SEIS", "OUTRA"]).optional(),
   shift: z.enum(["DIURNO", "NOTURNO", "MISTO", "ADMINISTRATIVO"]).optional(),

@@ -105,7 +105,7 @@ await step("ADMIN: login, menu com os 11 módulos exigidos e todas as configura�
   assert(labels[0] === "Dashboard", labels.join(","));
   await p.screenshot({ path: `${SHOTS}/02-dashboard-admin.png`, fullPage: true });
   await p.goto(`${BASE}/configuracoes`);
-  assert((await p.$$("main a.card")).length === 9, "seções de configuração");
+  assert((await p.$$("main a.card")).length === 10, "seções de configuração (9 + importação de dados)");
   await p.goto(`${BASE}/configuracoes/permissoes`);
   assert(await p.isVisible("text=Matriz de permissões"), "permissões");
   await p.screenshot({ path: `${SHOTS}/03-permissoes.png`, fullPage: true });

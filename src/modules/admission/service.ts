@@ -146,7 +146,7 @@ const dataInput = z.object({
   departmentId: z.string().min(1).optional(),
   managerId: z.string().optional(),
   salary: z.string().optional(),
-  contractType: z.enum(["CLT", "PJ", "ESTAGIO", "TEMPORARIO"]).optional(),
+  contractType: z.enum(["CLT", "PJ", "ESTAGIO", "TEMPORARIO", "APRENDIZ"]).optional(),
   schedule: z.enum(["SEIS_POR_UM", "CINCO_POR_DOIS", "DOZE_POR_TRINTA_E_SEIS", "OUTRA"]).optional(),
   shift: z.enum(["DIURNO", "NOTURNO", "MISTO", "ADMINISTRATIVO"]).optional(),
   workHours: z.string().trim().max(60).optional(),

@@ -34,9 +34,9 @@ export default async function PositionsPage({ searchParams }: { searchParams: Pr
                     <tr key={p.id}>
                       <td className="font-medium text-riale-900">
                         <Link href={`/cargos/${p.id}`} className="hover:underline">{p.title}</Link> {p.isLeadership && <Badge tone="gold">liderança</Badge>}
-                        {p.code && <p className="font-mono text-[10px] text-stone-400">{p.code}</p>}
+                        {(p.code || p.cbo) && <p className="font-mono text-[10px] text-stone-400">{[p.code, p.cbo && `CBO ${p.cbo}`].filter(Boolean).join(" · ")}</p>}
                       </td>
-                      <td><Badge tone="blue">{p.level}</Badge></td>
+                      <td>{p.levelConfirmed ? <Badge tone="blue">{p.level}</Badge> : <Badge tone="gold">a definir</Badge>}</td>
                       <td className="text-xs">{p.careerTrack?.name ?? "—"}</td>
                       <td className="text-xs">{(() => { const v = p.descriptions.find((d) => d.status === "VIGENTE"); const r = p.descriptions.find((d) => d.status === "RASCUNHO"); return v ? <Badge tone="green">vigente v{v.version}</Badge> : r ? <Badge tone="gold">rascunho</Badge> : <span className="text-stone-400">não cadastrado</span>; })()}</td>
                       <td className="tabular-nums">{p._count.employees}</td>

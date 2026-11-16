@@ -3,7 +3,7 @@
 import { requireUser } from "@/lib/session";
 import { formToObject, runAction, type ActionState } from "@/modules/shared/action";
 import {
-  addEmployeeSalary, addPayItem, decideElogio, deletePayItem, endBenefit, enrollBenefit, registerElogio, saveBenefit, saveBenefitUnitCost,
+  saveRateUnit, addEmployeeSalary, addPayItem, decideElogio, deletePayItem, endBenefit, enrollBenefit, registerElogio, saveBenefit, saveBenefitUnitCost,
   saveElogioRule, savePayItemType, savePositionSalary, savePpr, savePprGoal, saveRate,
 } from "@/modules/compensation/service";
 
@@ -40,6 +40,9 @@ export async function benefitUnitAction(_: ActionState, fd: FormData): Promise<A
 }
 export async function rateAction(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(fd, (u, d) => saveRate(u, d), "Encargo salvo.");
+}
+export async function rateUnitAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  return run(fd, (u, d) => saveRateUnit(u, d), "Alíquota da unidade salva.");
 }
 export async function payTypeAction(_: ActionState, fd: FormData): Promise<ActionState> {
   return run(fd, (u, d) => savePayItemType(u, d), "Rubrica salva.");

@@ -50,6 +50,7 @@ export const PERMISSION_CATALOG = {
   "users.manage": { module: "Usuários", description: "Cadastrar e editar usuários (RH: apenas perfil Gestor)", defaults: [A, R] },
   "permissions.manage": { module: "Segurança", description: "Alterar a matriz de permissões", defaults: [A] },
   "audit.view": { module: "Segurança", description: "Consultar a trilha de auditoria", defaults: [A, R] },
+  "dados.importar": { module: "Sistema", description: "Importar a carga de dados da empresa (cargos, quadro, salários e folha) — dados pessoais", defaults: [A] },
   "settings.manage": { module: "Sistema", description: "Alterar configurações do sistema", defaults: [A] },
   "pii.reveal": { module: "LGPD", description: "Revelar CPF completo (acesso auditado)", defaults: [A, R] },
   "documents.read": { module: "Documentos", description: "Baixar documentos protegidos", defaults: [A, R] },

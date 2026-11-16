@@ -194,13 +194,23 @@ export async function endBenefit(user: CurrentUser, enrollmentId: string, raw: u
 // ═════════ Encargos ═════════
 
 export async function listRates() {
-  return prisma.chargeRate.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }] });
+  return prisma.chargeRate.findMany({ orderBy: [{ sortOrder: "asc" }, { label: "asc" }], include: { units: { include: { unit: { select: { name: true } } } } } });
 }
-const rateInput = z.object({ id: z.string().optional(), label: z.string().trim().min(2).max(80), ratePct: z.preprocess((v) => (v === undefined || v === "" ? null : Number(String(v).replace(",", "."))), z.number().min(0).max(100).nullable()), legalRef: z.string().trim().max(200).optional(), active: bool.default(true) });
+
+/** Alíquota específica da unidade (vazio remove e volta a valer a geral). */
+export async function saveRateUnit(user: CurrentUser, raw: unknown) {
+  assertConfig(user);
+  const d = z.object({ rateId: z.string(), unitId: z.string(), ratePct: z.preprocess((v) => (v === undefined || v === "" ? null : Number(String(v).replace(",", "."))), z.number().min(0).max(100).nullable()) }).parse(raw);
+  if (d.ratePct === null) await prisma.chargeRateUnit.deleteMany({ where: { rateId: d.rateId, unitId: d.unitId } });
+  else await prisma.chargeRateUnit.upsert({ where: { rateId_unitId: { rateId: d.rateId, unitId: d.unitId } }, update: { ratePct: d.ratePct }, create: { rateId: d.rateId, unitId: d.unitId, ratePct: d.ratePct } });
+  await recordAudit({ entityType: "ChargeRateUnit", entityId: `${d.rateId}:${d.unitId}`, action: "UPDATE", actorId: user.id, actorRole: user.role, newValue: d });
+}
+const pctOrNull = z.preprocess((v) => (v === undefined || v === "" ? null : Number(String(v).replace(",", "."))), z.number().min(0).max(100).nullable());
+const rateInput = z.object({ id: z.string().optional(), label: z.string().trim().min(2).max(80), ratePct: pctOrNull, apprenticeRatePct: pctOrNull.optional(), legalRef: z.string().trim().max(200).optional(), active: bool.default(true) });
 export async function saveRate(user: CurrentUser, raw: unknown) {
   assertConfig(user);
   const d = rateInput.parse(raw);
-  const data = { label: d.label, ratePct: d.ratePct, legalRef: d.legalRef ?? null, active: d.active, updatedById: user.id };
+  const data = { label: d.label, ratePct: d.ratePct, ...(d.apprenticeRatePct !== undefined ? { apprenticeRatePct: d.apprenticeRatePct } : {}), legalRef: d.legalRef ?? null, active: d.active, updatedById: user.id };
   const saved = d.id ? await prisma.chargeRate.update({ where: { id: d.id }, data }) : await prisma.chargeRate.create({ data: { ...data, code: `ENC_${Date.now().toString(36).toUpperCase()}` } });
   await recordAudit({ entityType: "ChargeRate", entityId: saved.id, action: d.id ? "UPDATE" : "CREATE", actorId: user.id, actorRole: user.role, newValue: data });
   return saved;
@@ -356,20 +366,28 @@ export async function competenceReport(user: CurrentUser, comp: string, f: { uni
   const scoped = new Set((await prisma.employee.findMany({ where: employeeScopeWhere(user), select: { id: true } })).map((e) => e.id));
   const [all, rates, rule, table] = await Promise.all([
     loadEmployees(),
-    prisma.chargeRate.findMany({ where: { active: true } }),
+    prisma.chargeRate.findMany({ where: { active: true }, include: { units: true } }),
     ruleAt(last),
     prisma.positionSalary.findMany(),
   ]);
   const programs = await computePrograms(all);
   const rateDefs = rates.map((r) => ({ label: r.label, ratePct: N(r.ratePct) }));
+  /** Alíquota efetiva: da unidade (ex.: RAT×FAP por CNPJ) › de aprendiz › geral. */
+  const ratesFor = (unitId: string, contractType: string) => rates.map((r) => {
+    const unit = r.units.find((u) => u.unitId === unitId);
+    const pct = unit ? Number(unit.ratePct) : contractType === "APRENDIZ" && r.apprenticeRatePct !== null ? Number(r.apprenticeRatePct) : N(r.ratePct);
+    return { label: r.label, ratePct: pct };
+  });
   const rows = all
     .filter((e) => scoped.has(e.id) && e.admission <= last && (e.termination === null || e.termination >= from))
     .filter((e) => (!f.unidade || e.unitId === f.unidade) && (!f.departamento || e.departmentName === f.departamento) && (!f.cargo || e.positionId === f.cargo))
     .map((e) => {
       const base = e.baseAt(last);
-      const items = e.payItems.filter((i) => i.competence === comp).map((i) => ({ category: i.type.category, amount: Number(i.amount), chargeable: i.type.chargeable, label: i.type.label }));
+      const items = e.payItems.filter((i) => i.competence === comp).map((i) => ({ category: i.type.category, amount: Number(i.amount), chargeable: i.type.chargeable, label: i.type.label, code: i.type.code }));
       const approved = e.elogios.filter((x) => { const k = dateKey(x.date); return k >= from && k <= last; });
-      const el = approved.length ? elogioPremium(rule, approved) : null;
+      // Elogio já pago na folha (importado) não é recalculado pela regra — evita contar duas vezes
+      const paidElogio = items.some((i) => i.code === "ELOGIO_PAGO_FOLHA");
+      const el = approved.length && !paidElogio ? elogioPremium(rule, approved) : null;
       const benefits = e.benefits
         .filter((b) => dateKey(b.startDate) <= last && (!b.endDate || dateKey(b.endDate) >= from))
         .map((b) => {
@@ -387,7 +405,7 @@ export async function competenceReport(user: CurrentUser, comp: string, f: { uni
         const prev = ppr as { monthly: number; projected: boolean } | null;
         ppr = { monthly: Math.round(((prev?.monthly ?? 0) + sh.share / sh.months) * 100) / 100, projected: (prev?.projected ?? false) || p.projected };
       }
-      const comp_ = totalCompensation({ contractType: e.contractType, base, items, elogio: el ? { value: el.value, counted: el.counted } : null, elogioRuleMissing: approved.length > 0 && !rule, ppr, benefits, rates: rateDefs });
+      const comp_ = totalCompensation({ contractType: e.contractType, base, items, elogio: el ? { value: el.value, counted: el.counted } : null, elogioRuleMissing: approved.length > 0 && !rule && !paidElogio, ppr, benefits, rates: ratesFor(e.unitId, e.contractType) });
       const tableRef = resolvePositionSalary(table.filter((t) => t.positionId === e.positionId).map((t) => ({ unitId: t.unitId, baseSalary: Number(t.baseSalary), minSalary: N(t.minSalary), maxSalary: N(t.maxSalary), effectiveFrom: dateKey(t.effectiveFrom) })), e.unitId, last);
       return { id: e.id, name: e.name, internalId: e.internalId, unitName: e.unitName, departmentName: e.departmentName, positionTitle: e.positionTitle, contractType: e.contractType, items, benefits, tableRef, comp: comp_, monthsInCompetence: monthsWorked(e.admission, e.termination, from, last) };
     })
