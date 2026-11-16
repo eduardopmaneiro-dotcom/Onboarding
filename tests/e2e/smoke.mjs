@@ -250,7 +250,7 @@ await step("RH de unidade: vê configurações, mas não permissões/sistema; es
 });
 
 // ── Perfil GESTOR ──
-await step("GESTOR: menu sem Configurações/Remuneração/Importação; áreas restritas negadas; módulo futuro sinalizado", async () => {
+await step("GESTOR: menu sem Configurações/Remuneração/Importação/Admissões; áreas restritas negadas; vê a própria equipe", async () => {
   const c = await ctx();
   const p = await c.newPage();
   await login(p, USERS.gestor);
@@ -263,9 +263,12 @@ await step("GESTOR: menu sem Configurações/Remuneração/Importação; áreas 
   assert(p.url().endsWith("/acesso-negado"), p.url());
   await p.goto(`${BASE}/recrutamento/importar`);
   assert(p.url().endsWith("/acesso-negado"), "gestor não importa planilha");
+  await p.goto(`${BASE}/admissoes`);
+  assert(p.url().endsWith("/acesso-negado"), "gestor não acessa admissões");
   await p.goto(`${BASE}/colaboradores`);
-  assert(await p.isVisible("text=Módulo em desenvolvimento"), "placeholder");
-  await p.screenshot({ path: `${SHOTS}/05-modulo-futuro-gestor.png` });
+  assert(await p.getByRole("heading", { name: "Colaboradores" }).isVisible(), "colaboradores (própria equipe)");
+  assert(!(await p.isVisible("text=Cadastrar colaborador já admitido")), "gestor não cadastra colaborador");
+  await p.screenshot({ path: `${SHOTS}/05-colaboradores-gestor.png` });
   const me = await p.evaluate(() => fetch("/api/v1/me").then((r) => r.json()));
   assert(me.data.role === "GESTOR", JSON.stringify(me));
   const users = await p.evaluate(() => fetch("/api/v1/users").then((r) => r.status));

@@ -206,6 +206,7 @@ export async function getCandidate(user: CurrentUser, id: string) {
           jobOpening: { include: { position: true, department: { include: { unit: true } }, requestingManager: { select: { name: true } } } },
           interviews: { orderBy: { scheduledAt: "asc" }, include: { reason: true, interviewerUser: { select: { name: true } }, resultBy: { select: { name: true } } } },
           managerReviews: { orderBy: { requestedAt: "asc" }, include: { manager: { select: { name: true } }, decidedBy: { select: { name: true } }, reason: true } },
+          admissions: { select: { id: true, code: true, status: true } },
         },
       },
       events: { orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }], include: { actorUser: { select: { name: true } } } },

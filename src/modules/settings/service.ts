@@ -16,7 +16,21 @@ export const SETTINGS = {
   "email.fechamento_automatico": { label: "Enviar o fechamento automaticamente no horário (sim/não)", schema: z.preprocess((v) => (typeof v === "string" ? ["true", "sim", "1", "s"].includes(v.trim().toLowerCase()) : v), z.boolean()), default: true },
   "email.agenda_espera_min": { label: "Espera para consolidar o aviso de agenda (minutos, 0 = imediato)", schema: z.coerce.number().int().min(0).max(60), default: 3 },
   "email.copia": { label: "Cópia (CC) dos e-mails aos gestores — e-mails separados por vírgula (opcional)", schema: z.string().trim().max(500).refine((v) => !v || v.split(",").every((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x.trim())), "E-mail inválido na lista"), default: "" },
+  "experiencia.marcos": {
+    label: "Marcos da experiência (dias, separados por vírgula; o último é o fim da experiência)",
+    schema: z.string().trim().refine((v) => {
+      const n = v.split(",").map((x) => Number(x.trim()));
+      return n.length >= 1 && n.length <= 6 && n.every((x) => Number.isInteger(x) && x >= 1 && x <= 365) && n.every((x, i) => i === 0 || x > n[i - 1]);
+    }, "Informe de 1 a 6 números inteiros crescentes entre 1 e 365 (ex.: 30,45,90)"),
+    default: "30,45,90",
+  },
+  "experiencia.conta_dia_admissao": { label: "O dia da admissão conta como 1º dia da experiência (sim/não)", schema: z.preprocess((v) => (typeof v === "string" ? ["true", "sim", "1", "s"].includes(v.trim().toLowerCase()) : v), z.boolean()), default: true },
+  "experiencia.aviso_dias": { label: "Avisar o RH quantos dias antes de cada marco", schema: z.coerce.number().int().min(0).max(30), default: 5 },
+  "experiencia.alerta_email": { label: "Enviar os alertas da experiência também por e-mail ao RH (sim/não)", schema: z.preprocess((v) => (typeof v === "string" ? ["true", "sim", "1", "s"].includes(v.trim().toLowerCase()) : v), z.boolean()), default: true },
 } as const;
+
+/** Configurações que o RH pode alterar (regras da empresa para a admissão), além do Admin. */
+export const RH_SETTINGS: SettingKey[] = ["experiencia.marcos", "experiencia.conta_dia_admissao", "experiencia.aviso_dias", "experiencia.alerta_email"];
 
 export type SettingKey = keyof typeof SETTINGS;
 
@@ -38,7 +52,8 @@ export async function listSettings() {
 }
 
 export async function updateSetting(actor: CurrentUser, key: string, rawValue: unknown) {
-  assertCan(actor, "settings.manage");
+  if (RH_SETTINGS.includes(key as SettingKey) && actor.permissions.has("admissoes.config")) { /* regra da admissão: RH também pode */ }
+  else assertCan(actor, "settings.manage");
   if (!(key in SETTINGS)) throw new ValidationError("Configuração desconhecida");
   const def = SETTINGS[key as SettingKey];
   const parsed = def.schema.safeParse(rawValue);

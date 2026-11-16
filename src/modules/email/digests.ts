@@ -378,8 +378,9 @@ export async function runTick() {
   try {
     const agendas = await dispatchDueAgendas();
     const closings = await autoCloseDays();
+    const probation = await import("@/modules/people/alerts").then((m) => m.probationAlerts()).catch((e) => { console.error("alertas da experiência", e); return null; });
     const outbox = await processOutbox();
-    return { skipped: false, agendas, closings: closings.length, outbox };
+    return { skipped: false, agendas, closings: closings.length, probation, outbox };
   } finally {
     await releaseLock("tick");
   }

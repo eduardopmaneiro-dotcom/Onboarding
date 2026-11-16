@@ -246,6 +246,6 @@ HTML, CC e vínculo com a comunicação. A rotina roda pelo cron (`/api/cron/tic
 |---|---|---|
 | 2 ✅ | Vagas, Candidatos, Entrevistas, Aprovação do gestor, Importação | Concluída. Pendência: envio real de e-mails (Resend) |
 | 3 ✅ | Comunicação automática com gestores | Concluída. Pendência: credenciais do e-mail corporativo |
-| 4 | Admissões, Colaboradores | Fase 2; integração com folha/eSocial |
-| 4 | Remuneração, Pesquisa salarial | Catálogo de cargos saneado; MFA |
-| 4 ✓ | Relatórios e indicadores (`src/modules/analytics`, ver `docs/INDICADORES.md`) | Dados das fases 2–3 |
+| 4 ✅ | Relatórios e indicadores (`src/modules/analytics`, ver `docs/INDICADORES.md`) | Dados das fases 2–3 |
+| 5 ✅ | Admissões, Colaboradores, experiência, permanência e turnover (`src/modules/admission`, `src/modules/people`, ver `docs/ADMISSAO.md`) | Pendências: cadastro do quadro atual; integração com folha/eSocial |
+| — | Remuneração, Pesquisa salarial | Catálogo de cargos saneado; MFA |

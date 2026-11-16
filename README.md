@@ -4,7 +4,10 @@ Plataforma web interna da **Riale Hotéis** (Brisa Barra, Imperial e Vilamar). E
 construída para receber, em fases, os módulos de recrutamento, admissão, remuneração,
 indicadores e carreira.
 
-> **Fase atual: 4 — Painel gerencial e indicadores de RH** (recrutamento, conversão com
+> **Fase atual: 5 — Admissão e ciclo inicial do colaborador** (encaminhamento do aprovado,
+> checklist documental com anexos restritos, exame admissional/ASO, conversão em colaborador com
+> histórico preservado, marcos de 30/45/90 dias com alertas ao RH, desligamentos, permanência e
+> turnover — ver [`docs/ADMISSAO.md`](docs/ADMISSAO.md)), sobre a **Fase 4 — Painel gerencial e indicadores de RH** (recrutamento, conversão com
 > denominadores explícitos, produtividade, SLA por responsável com metas, filtros e exportação
 > Excel/PDF — ver [`docs/INDICADORES.md`](docs/INDICADORES.md)), sobre a **Fase 3 — Comunicação automática com gestores** (aviso consolidado de agenda,
 > fechamento diário às 18h30, retificações, fila com novas tentativas — ver
@@ -126,11 +129,17 @@ Senha de todos: **`Riale@2026Seguro`**
 | `npm run test:e2e:recrutamento` | Fluxo completo no navegador: vaga → candidatos (duplicidade) → agendamento em lote → resultado → decisão do gestor → histórico → importação da planilha |
 | `npm run test:e2e:comunicacao` | Navegador: revisão/edição do aviso, encerramento manual do dia, painel de configuração, proteção do cron |
 | `npm run test:e2e:indicadores` | Navegador: painel, filtros, tela × Excel exportado, PDF, metas de SLA, escopo do gestor, celular |
+| `npm run test:e2e:admissao` | Navegador: candidato aprovado → admissão (dados, anexo, recusa, exame, ASO) → colaborador → marco → desligamento → permanência; escopo da gestora |
 | `npm run test:e2e:first-access` | Banco de produção vazio: primeiro acesso (CPF + código), cadastro dos demais usuários, troca obrigatória de senha |
 
 O E2E exige o servidor no ar (`npm start`) e o Playwright instalado
 (`npm i -D playwright && npx playwright install chromium`). Capturas de tela ficam em
 `tests/e2e/screenshots/`.
+
+**Resultado na entrega da Fase 5:** 19/19 unitários; 50/50 de integração (38 anteriores, com o
+teste de contratação da Fase 4 refeito pelo fluxo de admissão, + 12 de admissão); E2E 15/15
+(Fase 1), 7/7 (recrutamento), 4/4 (comunicação), 7/7 (indicadores) e 10/10 (admissão), sobre banco
+recriado do zero.
 
 **Resultado na entrega da Fase 4:** 14/14 unitários; 38/38 de integração (30 anteriores + 8 de
 indicadores conferidos com registros conhecidos); E2E 15/15 (Fase 1), 7/7 (recrutamento), 4/4

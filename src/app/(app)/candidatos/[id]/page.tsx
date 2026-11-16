@@ -10,8 +10,9 @@ import { APP_STATUS_LABEL, APP_STATUS_TONE, BENEFITS, DECISION_LABEL, EXTERNAL_L
 import { ActionForm, Field, SelectField, Submit, TextAreaField } from "@/components/forms";
 import { ResultPanel } from "@/components/recruitment/result-panel";
 import { Badge, Card, PageHeader } from "@/components/ui";
-import { addApplicationAction, externalCheckAction, hireAction, resultAction, saveSalaryAction, updateCandidateAction } from "../../recrutamento/actions";
-import { fmtDate, todayKey } from "@/lib/datetime";
+import { addApplicationAction, externalCheckAction, resultAction, saveSalaryAction, updateCandidateAction } from "../../recrutamento/actions";
+import { forwardAction } from "../../admissoes/actions";
+import { fmtDate } from "@/lib/datetime";
 
 export const metadata = { title: "Candidato" };
 
@@ -27,6 +28,7 @@ export default async function CandidatePage({ params, searchParams }: { params: 
   const c = await getCandidate(user, id);
   const manage = can(user, "recrutamento.manage");
   const resultPerm = can(user, "entrevistas.resultado");
+  const canAdmit = can(user, "admissoes.manage");
   const [reasons, openJobs, positions] = await Promise.all([
     listReasons(),
     manage ? listJobs(user, { status: "ABERTA" }) : Promise.resolve([]),
@@ -132,14 +134,19 @@ export default async function CandidatePage({ params, searchParams }: { params: 
                   </div>
                 ))}
 
-                {manage && a.status === "APROVADO" && (
-                  <ActionForm action={hireAction} className="mt-4 flex flex-wrap items-end gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <input type="hidden" name="applicationId" value={a.id} />
-                    <div><label className="label" htmlFor={`hire-${a.id}`}>Aprovação final{a.approvedAt ? ` em ${fmtDate(a.approvedAt)}` : ""} — data de admissão</label><input id={`hire-${a.id}`} type="date" name="date" defaultValue={todayKey()} className="input" /></div>
-                    <Submit className="btn-primary" pendingText="…">Registrar admissão</Submit>
-                  </ActionForm>
-                )}
-                {a.status === "CONTRATADO" && a.hiredAt && <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Admitido(a) em {fmtDate(a.hiredAt)}.</p>}
+                {a.status === "APROVADO" && (() => {
+                  const adm = a.admissions.find((x) => x.status === "EM_ANDAMENTO");
+                  return adm ? (
+                    <p className="mt-4 rounded-lg border border-gold-400/50 bg-gold-100/40 px-3 py-2 text-sm text-riale-900">Em admissão: <Link href={`/admissoes/${adm.id}`} className="font-mono font-medium underline">{adm.code}</Link></p>
+                  ) : canAdmit ? (
+                    <ActionForm action={forwardAction} className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                      <input type="hidden" name="applicationId" value={a.id} />
+                      <span className="text-sm text-emerald-900">Aprovado em todas as etapas{a.approvedAt ? ` (${fmtDate(a.approvedAt)})` : ""}.</span>
+                      <Submit className="btn-primary btn-sm" pendingText="Abrindo…">Encaminhar para admissão</Submit>
+                    </ActionForm>
+                  ) : null;
+                })()}
+                {a.status === "CONTRATADO" && a.hiredAt && <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Admitido(a) em {fmtDate(a.hiredAt)}{c.hiredEmployeeId ? <> — <Link href={`/colaboradores/${c.hiredEmployeeId}`} className="font-medium underline">ver colaborador</Link></> : null}.</p>}
 
                 {c.showSalary && (
                   <details className="mt-4 rounded-lg border border-stone-200" open={!!(a.offeredSalary || a.expectedSalary)}>

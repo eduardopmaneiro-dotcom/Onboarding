@@ -7,6 +7,9 @@ import { listInterviews, listReviews, pendingResults } from "@/modules/recruitme
 import { jobScopeWhere } from "@/modules/recruitment/scope";
 import { RESULT_LABEL, RESULT_TONE } from "@/modules/recruitment/constants";
 import { Badge, Card, Empty, PageHeader } from "@/components/ui";
+import { myAlerts } from "@/modules/people/alerts";
+import { readyForAdmission, listAdmissions } from "@/modules/admission/service";
+import { readAlertAction } from "../colaboradores/actions";
 
 export const metadata = { title: "Dashboard" };
 
@@ -35,6 +38,11 @@ export default async function Dashboard() {
     prisma.interview.groupBy({ by: ["reasonId"], _count: true, where: { application: { jobOpening: jobs }, result: "REPROVADO", reasonId: { not: null } }, orderBy: { _count: { reasonId: "desc" } }, take: 6 }),
     prisma.rejectionReason.findMany(),
   ]);
+  const [alerts, ready, inAdmission] = await Promise.all([
+    myAlerts(user, 8),
+    can(user, "admissoes.view") ? readyForAdmission(user) : Promise.resolve([]),
+    can(user, "admissoes.view") ? listAdmissions(user, "EM_ANDAMENTO") : Promise.resolve([]),
+  ]);
   const total30 = last30.reduce((s, x) => s + x._count, 0);
   const approved30 = last30.find((x) => x.result === "APROVADO")?._count ?? 0;
   const decided30 = last30.filter((x) => x.result !== "PENDENTE").reduce((s, x) => s + x._count, 0);
@@ -62,6 +70,29 @@ export default async function Dashboard() {
           </>
         )}
       </div>
+
+      {(alerts.length > 0 || ready.length > 0 || inAdmission.length > 0) && (
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <Card title={`Alertas da experiência (${alerts.length})`} actions={<Link href="/colaboradores/experiencia" className="text-xs font-medium text-gold-600 hover:underline">acompanhamento →</Link>}>
+            {alerts.length === 0 ? <Empty>Nenhum alerta novo.</Empty> : (
+              <ul className="divide-y divide-stone-100">
+                {alerts.map((n) => (
+                  <li key={n.id} className="flex items-center justify-between gap-3 py-2.5 text-sm" data-alert>
+                    <Link href={n.relatedId ? `/colaboradores/${n.relatedId}` : "/colaboradores/experiencia"} className="hover:underline"><span className="font-medium text-riale-900">{n.subject}</span><span className="block text-xs text-stone-400">{n.body}</span></Link>
+                    <form action={readAlertAction}><input type="hidden" name="id" value={n.id} /><button className="text-xs text-stone-500 hover:underline">marcar como lido</button></form>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+          <Card title="Admissões" actions={<Link href="/admissoes" className="text-xs font-medium text-gold-600 hover:underline">abrir →</Link>}>
+            <dl className="grid grid-cols-2 gap-4 text-center">
+              <div><dt className="text-xs text-stone-500">Prontos para admissão</dt><dd className="font-serif text-3xl text-riale-900">{ready.length}</dd></div>
+              <div><dt className="text-xs text-stone-500">Processos em andamento</dt><dd className="font-serif text-3xl text-riale-900">{inAdmission.length}</dd></div>
+            </dl>
+          </Card>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Card title="Entrevistas de hoje" actions={<Link href="/entrevistas?visao=dia" className="text-xs font-medium text-gold-600 hover:underline">abrir agenda →</Link>}>

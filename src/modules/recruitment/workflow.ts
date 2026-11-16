@@ -413,30 +413,3 @@ export async function listReasons(includeInactive = false) {
 export async function listInterviewers() {
   return prisma.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true } });
 }
-
-// ═════════════════════════ ADMISSÃO (registro mínimo para os indicadores) ═════════════════════════
-
-const hireInput = z.object({ date: z.string({ error: "Informe a data de admissão" }).regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida") });
-
-/**
- * Registra a admissão de um candidato aprovado (data de início). Quando o número de admitidos
- * atinge a quantidade de vagas, a vaga é encerrada como PREENCHIDA.
- */
-export async function registerHire(user: CurrentUser, applicationId: string, raw: unknown) {
-  assertCan(user, "recrutamento.manage");
-  const { date } = hireInput.parse(raw);
-  const app = await prisma.application.findFirst({ where: { id: applicationId, jobOpening: jobScopeWhere(user) }, include: { jobOpening: { include: { position: true } } } });
-  if (!app) throw new NotFoundError("Candidatura não encontrada");
-  if (app.status !== "APROVADO") throw new ValidationError("Só é possível registrar admissão de candidato com aprovação final (RH, gestor e avaliação externa, quando houver)");
-  const hiredAt = localToDate(date, "08:00");
-  if (app.approvedAt && hiredAt < new Date(app.approvedAt.getTime() - 86_400_000)) throw new ValidationError("A admissão não pode ser anterior à aprovação", { date: ["Data anterior à aprovação"] });
-  await prisma.$transaction(async (tx) => {
-    await tx.application.update({ where: { id: app.id }, data: { status: "CONTRATADO", hiredAt, hiredById: user.id } });
-    await recordEvent(tx, { candidateId: app.candidateId, applicationId: app.id, type: "STATUS", summary: `Admissão registrada para ${fmtDateTime(hiredAt, false)} (${app.jobOpening.position.title})`, actorUserId: user.id });
-    const hired = await tx.application.count({ where: { jobOpeningId: app.jobOpeningId, status: "CONTRATADO" } });
-    if (hired >= app.jobOpening.headcount && ["ABERTA", "PAUSADA"].includes(app.jobOpening.status)) {
-      await tx.jobOpening.update({ where: { id: app.jobOpeningId }, data: { status: "PREENCHIDA", closedAt: hiredAt } });
-    }
-  });
-  await recordAudit({ entityType: "Application", entityId: app.id, action: "STATUS_CHANGE", actorId: user.id, actorRole: user.role, newValue: { status: "CONTRATADO", hiredAt } });
-}

@@ -39,10 +39,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Indicadores de RH"
         subtitle={`${filterSummary(r)} · dados reais do banco, atualizados em ${fmtDateTime(r.generatedAt)}`}
-        actions={can(user, "relatorios.exportar") && (
+        actions={(
           <>
-            <a href={`/api/v1/reports/xlsx?${exportQs}`} className="btn-ghost">Exportar Excel</a>
-            <a href={`/api/v1/reports/pdf?${exportQs}`} className="btn-ghost">Exportar PDF</a>
+            <Link href={`/relatorios/permanencia?gran=${r.period.gran}&ref=${r.period.from}`} className="btn-ghost">Permanência e turnover</Link>
+            {can(user, "relatorios.exportar") && <a href={`/api/v1/reports/xlsx?${exportQs}`} className="btn-ghost">Exportar Excel</a>}
+            {can(user, "relatorios.exportar") && <a href={`/api/v1/reports/pdf?${exportQs}`} className="btn-ghost">Exportar PDF</a>}
           </>
         )}
       />

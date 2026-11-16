@@ -7,7 +7,7 @@ import { formToObject, runAction, type ActionState } from "@/modules/shared/acti
 import { toPublicError } from "@/modules/shared/errors";
 import { createJob, updateJob } from "@/modules/recruitment/jobs";
 import { addApplication, createCandidate, DuplicateCandidateError, updateCandidate, updateSalary } from "@/modules/recruitment/candidates";
-import { cancelInterview, decideReview, registerHire, registerResult, rescheduleInterview, scheduleInterviews, setExternalCheck } from "@/modules/recruitment/workflow";
+import { cancelInterview, decideReview, registerResult, rescheduleInterview, scheduleInterviews, setExternalCheck } from "@/modules/recruitment/workflow";
 import { cancelImport, commitImport, saveColumnMap, saveValueMap, setRowDecision, uploadSpreadsheet, type ColumnMap, type ValueMap } from "@/modules/import/service";
 import type { ExternalCheckStatus } from "@prisma/client";
 
@@ -218,10 +218,3 @@ export async function cancelImportAction(_: ActionState, fd: FormData): Promise<
   }, ["/recrutamento/importar"]);
 }
 
-export async function hireAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await requireUser();
-  return runAction(async () => {
-    await registerHire(user, String(fd.get("applicationId")), { date: fd.get("date") });
-    return "Admissão registrada.";
-  }, [...R, "/relatorios"]);
-}

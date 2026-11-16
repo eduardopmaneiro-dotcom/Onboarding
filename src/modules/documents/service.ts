@@ -14,7 +14,20 @@ const ALLOWED_MIME: Record<string, string[]> = {
   "image/png": [".png"],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
 };
-const OWNER_TYPES = ["Employee", "Candidate", "Manager", "JobOpening"] as const;
+const OWNER_TYPES = ["Employee", "Candidate", "Manager", "JobOpening", "AdmissionDocument", "MedicalExam"] as const;
+/** Documentos admissionais: acesso restrito (permissão própria + escopo da unidade do processo). */
+const RESTRICTED: Record<string, (ownerId: string) => Promise<string | null>> = {
+  AdmissionDocument: async (id) => (await prisma.admissionDocument.findUnique({ where: { id }, select: { admission: { select: { department: { select: { unitId: true } } } } } }))?.admission.department.unitId ?? null,
+  MedicalExam: async (id) => (await prisma.medicalExam.findUnique({ where: { id }, select: { admission: { select: { department: { select: { unitId: true } } } } } }))?.admission.department.unitId ?? null,
+};
+async function assertRestrictedAccess(actor: CurrentUser, ownerType: string, ownerId: string) {
+  const resolve = RESTRICTED[ownerType];
+  if (!resolve) return;
+  assertCan(actor, "admissoes.documentos");
+  const unitId = await resolve(ownerId);
+  if (!unitId) throw new NotFoundError("Documento não encontrado");
+  if (actor.role !== "ADMIN" && actor.unitId && actor.unitId !== unitId) throw new NotFoundError("Documento não encontrado");
+}
 
 /** Assinaturas binárias ("magic numbers") — não confia no mime declarado pelo navegador. */
 function sniff(buf: Buffer): string | null {
@@ -31,6 +44,7 @@ export async function storeDocument(
 ) {
   assertCan(actor, "documents.write");
   if (!OWNER_TYPES.includes(input.ownerType as (typeof OWNER_TYPES)[number])) throw new ValidationError("Tipo de proprietário inválido");
+  await assertRestrictedAccess(actor, input.ownerType, input.ownerId);
   const maxMb = await getSetting("security.max_upload_mb");
   if (input.file.size === 0) throw new ValidationError("Arquivo vazio");
   if (input.file.size > maxMb * 1024 * 1024) throw new ValidationError(`Arquivo acima de ${maxMb} MB`);
@@ -63,6 +77,8 @@ export async function readDocument(actor: CurrentUser, documentId: string) {
   assertCan(actor, "documents.read");
   const doc = await prisma.document.findFirst({ where: { id: documentId, deletedAt: null }, include: { blob: true } });
   if (!doc?.blob) throw new NotFoundError("Documento não encontrado");
+  try { await assertRestrictedAccess(actor, doc.ownerType, doc.ownerId); }
+  catch (e) { await recordAudit({ entityType: "Document", entityId: doc.id, action: "ACCESS_DENIED", actorId: actor.id, actorRole: actor.role }); throw e; }
   const data = decryptBuffer(Buffer.from(doc.blob.data));
   if (sha256(data) !== doc.sha256) throw new Error("Falha de integridade do documento");
   await recordAudit({ entityType: "Document", entityId: doc.id, action: "DOCUMENT_DOWNLOAD", actorId: actor.id, actorRole: actor.role });

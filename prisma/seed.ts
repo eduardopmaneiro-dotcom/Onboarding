@@ -12,6 +12,8 @@ import { protectCpf, cpfHash } from "../src/lib/cpf";
 import { hashPassword } from "../src/lib/password";
 import { DEFAULT_REASONS } from "../src/modules/recruitment/constants";
 import { simulateRecruitment } from "./demo-recruitment";
+import { simulateAdmissions } from "./demo-admission";
+import { DEFAULT_DOC_TYPES } from "../src/modules/admission/constants";
 
 try {
   process.loadEnvFile?.(".env"); // ambiente local (crypto/Prisma leem o env sob demanda); na Vercel as variáveis já vêm do ambiente
@@ -179,6 +181,15 @@ async function main() {
     });
   }
 
+  // ── Checklist admissional padrão (estrutura; o RH ajusta em Admissões › Configurações) ──
+  for (const [i, t] of DEFAULT_DOC_TYPES.entries()) {
+    await prisma.admissionDocType.upsert({
+      where: { code: t.code },
+      update: {},
+      create: { code: t.code, label: t.label, category: t.category, required: t.required ?? true, condition: t.condition ?? "SEMPRE", sortOrder: (i + 1) * 10, description: t.description ?? null },
+    });
+  }
+
   const demo = process.env.SEED_DEMO === "true";
   if (demo && process.env.VERCEL_ENV === "production") throw new Error("SEED_DEMO não é permitido em produção");
 
@@ -265,6 +276,11 @@ async function main() {
   if (demo && (await prisma.jobOpening.count({ where: { isHistorical: false } })) === 0) {
     const r = await simulateRecruitment(prisma);
     console.log(`Recrutamento simulado: ${r.jobs.length} vagas, ${r.candidates.length} candidatos.`);
+  }
+  // ── Admissões e colaboradores de demonstração (fictícios) — só se ainda não houver colaboradores ──
+  if (demo && (await prisma.employee.count()) === 0) {
+    const r = await simulateAdmissions(prisma);
+    console.log(`Admissões simuladas: ${r.admissions.join(", ")}; ${r.staff} colaboradores já admitidos.`);
   }
 
   console.log(`Seed concluído (${demo ? "estrutura + demonstração" : "estrutura"}).`);

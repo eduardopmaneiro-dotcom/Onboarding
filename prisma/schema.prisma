@@ -128,6 +128,7 @@ model Department {
   movementsFrom MovementHistory[] @relation("MovementFromDept")
   movementsTo   MovementHistory[] @relation("MovementToDept")
   managers      Manager[] // mais de um gestor por departamento é permitido
+  admissions    Admission[]
 
   @@unique([unitId, name])
   @@index([unitId])
@@ -180,6 +181,7 @@ model Position {
   movementsTo           MovementHistory[]    @relation("MovementTo")
   managers              Manager[]
   SlaTarget             SlaTarget[]
+  admissions            Admission[]
 
   @@unique([title])
 }
@@ -243,6 +245,7 @@ model Manager {
   employees      Employee[]
   jobOpenings    JobOpening[]
   managerReviews ManagerReview[]
+  admissions     Admission[]
   movementsFrom  MovementHistory[] @relation("MovementFromManager")
   movementsTo    MovementHistory[] @relation("MovementToManager")
   ManagerDigest  ManagerDigest[]
@@ -269,35 +272,54 @@ enum ContractType {
 }
 
 model Employee {
-  id              String         @id @default(cuid())
-  fullName        String
-  internalId      String?        @unique // matrícula
-  cpfHash         String?        @unique
-  cpfEnc          String?
-  email           String?
-  contractType    ContractType   @default(CLT)
-  departmentId    String // departamento → unidade (sem duplicar a unidade)
-  department      Department     @relation(fields: [departmentId], references: [id])
-  positionId      String
-  position        Position       @relation(fields: [positionId], references: [id])
-  managerId       String?
-  manager         Manager?       @relation(fields: [managerId], references: [id])
-  buddyId         String?
-  buddy           Employee?      @relation("BuddyEmployees", fields: [buddyId], references: [id])
-  buddyFor        Employee[]     @relation("BuddyEmployees")
-  status          EmployeeStatus @default(PRE_ADMISSAO)
-  admissionDate   DateTime
-  terminationDate DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                String           @id @default(cuid())
+  fullName          String
+  internalId        String?          @unique // matrícula
+  cpfHash           String? // CPF protegido; um vínculo ativo por CPF (índice parcial no banco) — readmissão gera novo registro
+  cpfEnc            String?
+  email             String?
+  phone             String?
+  contractType      ContractType     @default(CLT)
+  origin            EmployeeOrigin   @default(CADASTRO_DIRETO)
+  /// Vínculo com o processo seletivo (histórico preservado: candidato, candidatura e admissão)
+  candidateId       String?
+  candidate         Candidate?       @relation("EmployeeCandidate", fields: [candidateId], references: [id])
+  applicationId     String?          @unique
+  application       Application?     @relation(fields: [applicationId], references: [id])
+  baseSalary        Decimal?         @db.Decimal(10, 2) // acesso restrito (colaboradores.salario)
+  schedule          WorkSchedule?
+  shift             WorkShift?
+  workHours         String?
+  weeklyHours       Int?
+  probationEndDate  DateTime? // fim do período de experiência (último marco)
+  terminationType   TerminationType?
+  terminationReason String?          @db.Text
+  terminationById   String?
+  createdById       String?
+  departmentId      String // departamento → unidade (sem duplicar a unidade)
+  department        Department       @relation(fields: [departmentId], references: [id])
+  positionId        String
+  position          Position         @relation(fields: [positionId], references: [id])
+  managerId         String?
+  manager           Manager?         @relation(fields: [managerId], references: [id])
+  buddyId           String?
+  buddy             Employee?        @relation("BuddyEmployees", fields: [buddyId], references: [id])
+  buddyFor          Employee[]       @relation("BuddyEmployees")
+  status            EmployeeStatus   @default(PRE_ADMISSAO)
+  admissionDate     DateTime
+  terminationDate   DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   movements       MovementHistory[]
   candidateOrigin Candidate?
+  admission       Admission?
+  milestones      ProbationMilestone[]
   onboardings     OnboardingProcess[]
   pdis            PDI[]
   promotionScores PromotionScore[]
   pdlCandidacies  PDLCandidacy[]
-  auditImpacted   AuditLog[]          @relation("ImpactedEmployee")
+  auditImpacted   AuditLog[]           @relation("ImpactedEmployee")
 
   responsibleStages       OnboardingStage[]
   checklistItems          ChecklistItem[]
@@ -312,6 +334,25 @@ model Employee {
   @@index([positionId])
   @@index([managerId])
   @@index([status])
+  @@index([cpfHash])
+  @@index([candidateId])
+}
+
+enum EmployeeOrigin {
+  RECRUTAMENTO // convertido a partir do processo seletivo
+  CADASTRO_DIRETO // já trabalhava na empresa antes da plataforma
+}
+
+enum TerminationType {
+  PEDIDO_DEMISSAO
+  DISPENSA_SEM_JUSTA_CAUSA
+  DISPENSA_JUSTA_CAUSA
+  TERMINO_EXPERIENCIA // término do contrato de experiência
+  RESCISAO_ANTECIPADA_EMPRESA // durante a experiência, por iniciativa da empresa
+  RESCISAO_ANTECIPADA_COLABORADOR // durante a experiência, por iniciativa do colaborador
+  ACORDO
+  FALECIMENTO
+  OUTRO
 }
 
 enum MovementType {
@@ -470,6 +511,8 @@ model Candidate {
 
   applications Application[]
   events       CandidateEvent[]
+  employments  Employee[]       @relation("EmployeeCandidate")
+  admissions   Admission[]
 
   @@index([email])
   @@index([nameNormalized])
@@ -524,6 +567,8 @@ model Application {
   interviews     Interview[]
   managerReviews ManagerReview[]
   events         CandidateEvent[]
+  admissions     Admission[]
+  employee       Employee?
 
   @@unique([candidateId, jobOpeningId])
   @@index([jobOpeningId, status])
@@ -643,6 +688,8 @@ enum CandidateEventType {
   SALARIO
   IMPORTACAO
   OBSERVACAO
+  ADMISSAO // encaminhado, documentos, exame, cancelamento
+  CONTRATACAO // convertido em colaborador
 }
 
 /// Histórico do candidato — somente inserção (trigger no banco).
@@ -1297,4 +1344,191 @@ model PDLCandidacy {
   finishedAt             DateTime?
 
   @@index([employeeId])
+}
+
+// ───────────────────────── ADMISSÃO E CICLO INICIAL (Fase 5) ─────────────────────────
+
+enum AdmissionStatus {
+  EM_ANDAMENTO
+  CONCLUIDA // convertido em colaborador
+  CANCELADA
+}
+
+enum AdmissionCancelReason {
+  DESISTENCIA_CANDIDATO
+  INAPTO_EXAME
+  DOCUMENTACAO
+  VAGA_CANCELADA
+  OUTRO
+}
+
+/// Processo admissional: nasce do encaminhamento de uma candidatura com aprovação final.
+/// Uma candidatura tem no máximo um processo não cancelado (índice parcial no banco).
+model Admission {
+  id                String                 @id @default(cuid())
+  code              String                 @unique // ADM-2026-0001
+  applicationId     String
+  application       Application            @relation(fields: [applicationId], references: [id])
+  candidateId       String
+  candidate         Candidate              @relation(fields: [candidateId], references: [id])
+  status            AdmissionStatus        @default(EM_ANDAMENTO)
+  /// Dados da admissão (pré-preenchidos pela vaga; editáveis até a conclusão)
+  admissionDate     DateTime?
+  positionId        String
+  position          Position               @relation(fields: [positionId], references: [id])
+  departmentId      String // → unidade
+  department        Department             @relation(fields: [departmentId], references: [id])
+  managerId         String?
+  manager           Manager?               @relation(fields: [managerId], references: [id])
+  salary            Decimal?               @db.Decimal(10, 2)
+  contractType      ContractType           @default(CLT)
+  schedule          WorkSchedule?
+  shift             WorkShift?
+  workHours         String?
+  weeklyHours       Int?
+  /// Condições do checklist
+  hasDependents     Boolean                @default(false)
+  educationRequired Boolean                @default(false)
+  cancelReason      AdmissionCancelReason?
+  cancelNote        String?                @db.Text
+  canceledAt        DateTime?
+  employeeId        String?                @unique
+  employee          Employee?              @relation(fields: [employeeId], references: [id])
+  completedAt       DateTime?
+  completedById     String?
+  createdById       String
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  documents AdmissionDocument[]
+  exams     MedicalExam[]
+
+  @@index([status])
+  @@index([applicationId])
+}
+
+enum DocumentCondition {
+  SEMPRE
+  ESCOLARIDADE_EXIGIDA
+  COM_DEPENDENTES
+}
+
+/// Item configurável do checklist admissional
+model AdmissionDocType {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  label       String
+  category    String // IDENTIFICACAO, CADASTRAIS, CTPS, BANCARIO, ESCOLARIDADE, DEPENDENTES, OUTROS
+  description String?
+  required    Boolean           @default(true)
+  condition   DocumentCondition @default(SEMPRE)
+  sortOrder   Int               @default(0)
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  documents AdmissionDocument[]
+}
+
+enum AdmissionDocStatus {
+  PENDENTE
+  RECEBIDO
+  EM_ANALISE
+  APROVADO
+  RECUSADO
+}
+
+model AdmissionDocument {
+  id            String             @id @default(cuid())
+  admissionId   String
+  admission     Admission          @relation(fields: [admissionId], references: [id])
+  docTypeId     String
+  docType       AdmissionDocType   @relation(fields: [docTypeId], references: [id])
+  status        AdmissionDocStatus @default(PENDENTE)
+  refusalReason String?
+  note          String?
+  statusAt      DateTime?
+  statusById    String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([admissionId, docTypeId])
+}
+
+model Clinic {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  address   String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  exams MedicalExam[]
+}
+
+enum ExamStatus {
+  AGENDADO
+  REALIZADO
+  NAO_COMPARECEU
+  CANCELADO
+}
+
+enum ExamResult {
+  PENDENTE
+  APTO
+  APTO_COM_RESTRICOES
+  INAPTO
+}
+
+/// Exame admissional (ASO). Remarcação = novo registro; o anterior fica cancelado/falta.
+model MedicalExam {
+  id            String     @id @default(cuid())
+  admissionId   String
+  admission     Admission  @relation(fields: [admissionId], references: [id])
+  clinicId      String
+  clinic        Clinic     @relation(fields: [clinicId], references: [id])
+  scheduledAt   DateTime
+  status        ExamStatus @default(AGENDADO)
+  performedAt   DateTime?
+  asoReceivedAt DateTime?
+  result        ExamResult @default(PENDENTE)
+  note          String?
+  createdById   String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([admissionId])
+}
+
+enum MilestoneStatus {
+  PENDENTE
+  REALIZADO
+  ENCERRADO_DESLIGAMENTO // colaborador desligado antes do marco
+}
+
+enum MilestoneOutcome {
+  SEGUE // aprovado no marco, segue na experiência
+  EFETIVADO // aprovado ao fim da experiência
+  DESLIGAMENTO // indicado desligamento
+}
+
+/// Marcos da experiência (ex.: 30, 45, 90 dias), gerados na admissão com a regra vigente.
+model ProbationMilestone {
+  id          String            @id @default(cuid())
+  employeeId  String
+  employee    Employee          @relation(fields: [employeeId], references: [id])
+  days        Int
+  dueDate     DateTime
+  isFinal     Boolean           @default(false) // fim do período de experiência
+  status      MilestoneStatus   @default(PENDENTE)
+  outcome     MilestoneOutcome?
+  notes       String?           @db.Text
+  doneAt      DateTime?
+  doneById    String?
+  alertLeadAt DateTime? // aviso antecipado enviado
+  alertDueAt  DateTime? // aviso no dia / em atraso enviado
+  createdAt   DateTime          @default(now())
+
+  @@unique([employeeId, days])
+  @@index([status, dueDate])
 }

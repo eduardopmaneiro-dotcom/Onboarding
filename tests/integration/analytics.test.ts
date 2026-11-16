@@ -189,26 +189,27 @@ test("Exportação: Excel com fórmulas, validação e metodologia; PDF válido"
   assert.ok(pdf.length > 2000);
 });
 
-test("Admissão: só após aprovação final; preenche a vaga ao atingir a quantidade", async () => {
-  const { registerHire } = await import("../../src/modules/recruitment/workflow");
+test("Contratação pelo módulo de admissão alimenta os indicadores (contratações e SLA aprovação → admissão)", async () => {
+  const { forwardToAdmission, updateAdmission, scheduleExam, updateExam, confirmAdmission } = await import("../../src/modules/admission/service");
+  const { saveClinic } = await import("../../src/modules/admission/config");
+  const { approveAllDocs, fakeCpf } = await import("../../prisma/demo-admission");
+  const { addDays, todayKey, localToDate } = await import("../../src/lib/datetime");
   const rh = await asUser(prisma, "rh@rialehoteis.com.br");
+  const today = todayKey();
   const dept = await prisma.department.findFirstOrThrow({ where: { unitId, name: "Recepção" } });
-  const job = await prisma.jobOpening.create({ data: { code: `KPI-${TAG}-3`, positionId: ids.pRec, departmentId: dept.id, headcount: 1, status: "ABERTA", openedAt: T("2026-05-04T09:00") } });
-  const mk = async (k: string, status: string) => {
-    const c = await prisma.candidate.create({ data: { fullName: `Kpi ${k} ${TAG}`, nameNormalized: `kpi ${k.toLowerCase()} ${TAG.toLowerCase()}`, phone: "21999990000" } });
-    return prisma.application.create({ data: { candidateId: c.id, jobOpeningId: job.id, status: status as never, approvedAt: status === "APROVADO" ? T("2026-05-10T10:00") : null } });
-  };
-  const waiting = await mk("H1", "AGUARDANDO_GESTOR");
-  await assert.rejects(registerHire(rh, waiting.id, { date: "2026-05-15" }), /aprovação final/);
-  const ok = await mk("H2", "APROVADO");
-  await assert.rejects(registerHire(rh, ok.id, { date: "2026-05-01" }), /anterior à aprovação/);
-  await registerHire(rh, ok.id, { date: "2026-05-15" });
-  const after = await prisma.application.findUniqueOrThrow({ where: { id: ok.id } });
-  assert.equal(after.status, "CONTRATADO");
-  assert.equal(after.hiredAt?.toISOString(), T("2026-05-15T08:00").toISOString());
-  const j = await prisma.jobOpening.findUniqueOrThrow({ where: { id: job.id } });
-  assert.equal(j.status, "PREENCHIDA");
-  const may = await report({ ref: "2026-05-20" });
-  assert.equal(may.counts.contratacoes, 1);
-  close(may.sla.find((s) => s.stage === "APROVACAO_ADMISSAO")!.mean, 4 + 22 / 24); // 10/05 10h → 15/05 08h
+  const job = await prisma.jobOpening.create({ data: { code: `KPI-${TAG}-3`, positionId: ids.pRec, departmentId: dept.id, headcount: 1, status: "ABERTA", openedAt: localToDate(addDays(today, -20)) } });
+  const c = await prisma.candidate.create({ data: { fullName: `Kpi H ${TAG}`, nameNormalized: `kpi h ${TAG.toLowerCase()}`, phone: "21999990000" } });
+  const app = await prisma.application.create({ data: { candidateId: c.id, jobOpeningId: job.id, status: "APROVADO", approvedAt: localToDate(addDays(today, -5), "10:00") } });
+  const adm = await forwardToAdmission(rh, app.id);
+  await updateAdmission(rh, adm.id, { admissionDate: today, cpf: fakeCpf(Number(Date.now().toString().slice(-7)) + 77), salary: "2000", schedule: "SEIS_POR_UM", managerId: (await prisma.manager.findFirstOrThrow({ where: { departmentId: dept.id } })).id });
+  await approveAllDocs(prisma, rh.email, adm.id);
+  const clinic = await saveClinic(rh, { name: `Clínica KPI ${TAG}` });
+  const ex = await scheduleExam(rh, adm.id, { clinicId: clinic.id, date: addDays(today, -1), time: "08:00" });
+  await updateExam(rh, ex.id, { action: "realizado", date: addDays(today, -1) });
+  await updateExam(rh, ex.id, { action: "aso", date: today, result: "APTO" });
+  await confirmAdmission(rh, adm.id);
+  assert.equal((await prisma.jobOpening.findUniqueOrThrow({ where: { id: job.id } })).status, "PREENCHIDA");
+  const now = await report({ ref: today });
+  assert.equal(now.counts.contratacoes, 1);
+  close(now.sla.find((s) => s.stage === "APROVACAO_ADMISSAO")!.mean, 4 + 22 / 24); // D-5 10h → D 08h
 });

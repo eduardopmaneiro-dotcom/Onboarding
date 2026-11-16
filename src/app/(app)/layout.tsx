@@ -6,6 +6,8 @@ import { can } from "@/lib/session";
 import { pendingResults, pendingReviewCount } from "@/modules/recruitment/workflow";
 import { ROLE_LABEL } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
+import { admissionScopeWhere } from "@/modules/people/scope";
+import { countMilestonesNeedingAction } from "@/modules/people/service";
 import { recordAudit } from "@/lib/audit";
 import { Sidebar } from "@/components/sidebar";
 import { AutoDispatch } from "@/components/auto-dispatch";
@@ -16,14 +18,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (user.mustChangePassword) redirect("/trocar-senha");
 
   const unit = user.unitId ? await prisma.unit.findUnique({ where: { id: user.unitId }, select: { name: true } }) : null;
-  const [reviews, results, comms] = await Promise.all([
+  const [reviews, results, comms, admissoes, experiencia] = await Promise.all([
     pendingReviewCount(user),
     pendingResults(user).then((r) => r.length),
     can(user, "comunicacoes.view")
       ? Promise.all([prisma.managerDigest.count({ where: { status: { in: ["AGUARDANDO_REVISAO", "SEM_DESTINATARIO"] } } }), prisma.notification.count({ where: { channel: "EMAIL", status: "FALHOU" } })]).then(([a, b]) => a + b)
       : Promise.resolve(0),
+    can(user, "admissoes.view")
+      ? Promise.all([prisma.admission.count({ where: { ...admissionScopeWhere(user), status: "EM_ANDAMENTO" } }), prisma.application.count({ where: { status: "APROVADO", admissions: { none: { status: { not: "CANCELADA" } } }, jobOpening: user.role === "RH" && user.unitId ? { department: { unitId: user.unitId } } : {} } })]).then(([a, b]) => a + b)
+      : Promise.resolve(0),
+    countMilestonesNeedingAction(user),
   ]);
-  const badges = { aprovacoes: reviews, resultados: results, comunicacoes: comms };
+  const badges = { aprovacoes: reviews, resultados: results, comunicacoes: comms, admissoes, experiencia };
   const items = NAVIGATION.filter((n) => user.permissions.has(n.permission)).map(({ href, label, icon, ready, group, badge }) => ({
     href, label, icon, ready, group, groupLabel: NAV_GROUP_LABEL[group], badge: badge ? badges[badge] : undefined,
   }));
